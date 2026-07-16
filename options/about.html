@@ -3,14 +3,42 @@
 <head>
   <meta charset="UTF-8">
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; color: #333; background: #f5f5f5; max-width: 600px; margin: 40px auto; padding: 20px; }
-    h1 { font-size: 20px; margin-bottom: 20px; }
-    p { margin: 12px 0; line-height: 1.6; }
-    a { color: #1890ff; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; color: #333; background: #f5f5f5; min-height: 100vh; }
+    .container { max-width: 600px; margin: 0 auto; padding: 40px 20px; }
+    .card { background: #fff; border-radius: 8px; padding: 30px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+    h1 { font-size: 24px; margin-bottom: 6px; }
+    .version { font-size: 13px; color: #999; margin-bottom: 20px; }
+    p { line-height: 1.8; margin: 8px 0; color: #555; }
+    a { color: #1890ff; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    hr { border: none; border-top: 1px solid #f0f0f0; margin: 20px 0; }
+    .footer-links { margin-top: 16px; text-align: center; font-size: 13px; color: #999; }
+    .footer-links a { margin: 0 8px; }
+    .footer-links .sep { color: #ddd; }
   </style>
 </head>
 <body>
-  <h1>关于 Auto Rule Highlighter</h1>
-  <p>Icons by <a href="https://icons8.com" target="_blank">Icons8</a></p>
+  <div class="container">
+    <div class="card">
+      <h1>Auto Rule Highlighter</h1>
+      <div class="version">v1.1.0 &mdash; GPL v3</div>
+      <p>根据自定义规则自动高亮网页关键字，支持正则、通配符等多种匹配方式。</p>
+
+      <p>欢迎提交 Issue 或 Pull Request 来帮助改进这个项目。</p>
+
+      <hr>
+
+      <p><a href="https://github.com/dsqm/Auto-Rule-Highlighter" target="_blank">GitHub 仓库</a></p>
+      <p><a href="https://github.com/dsqm/Auto-Rule-Highlighter/issues" target="_blank">提交 Issue</a></p>
+      <p>Icons by <a href="https://icons8.com" target="_blank">Icons8</a>.</p>
+    </div>
+
+    <div class="footer-links">
+      <a href="options.html">设置</a>
+      <span class="sep">|</span>
+      <a href="about.html">关于</a>
+    </div>
+  </div>
 </body>
 </html>

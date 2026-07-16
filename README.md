@@ -1,2 +1,103 @@
-# Auto-Rule-Highlighter
+# Auto Rule Highlighter
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+
+根据自定义规则自动高亮网页关键字的浏览器扩展，支持正则、通配符等多种匹配方式，提供右边栏标记导航和临时高亮查询。
+
+## 功能
+
+### 自动规则高亮
+- 为不同网站配置自动高亮规则，URL 匹配支持包含、精确、正则、通配符四种模式。
+- 每条规则可添加多个关键词，每个关键词独立设置颜色、匹配方式、是否区分大小写、是否跨元素匹配。
+- 关键词支持设置排除级别（独占优先级），高优先级的关键词出现时自动隐藏低优先级的高亮，避免视觉干扰。
+
+### 临时高亮查询
+- 点击扩展图标打开弹窗，输入关键词即可在当前页面即时高亮，不会保存到规则中。
+- 支持同时添加多个关键词，支持区分大小写和跨元素匹配。
+- 输入内容自动记录到历史，方便重复使用，支持从历史下拉列表快速选择。
+
+### 高亮此处
+- 选中页面文字后，通过右键菜单或快捷键，仅高亮选中的区域，不影响其他文字。
+- 支持自定义颜色，高亮数据自动保存，关闭弹窗后不丢失。
+
+### 右边栏标记导航
+- 页面右侧显示高亮标记条，每个标记对应一个高亮位置。
+- 标记颜色与关键词颜色一致，鼠标悬停放大，点击即可滚动到对应位置。
+- 页面高度变化时自动更新标记位置。
+
+### 页面级开关
+- 弹窗中可单独禁用当前页面的高亮，扩展图标显示灰色 OFF 状态。
+- 禁用后不影响其他页面，重新启用时自动恢复高亮。
+
+### 快捷键
+- 支持在 `chrome://extensions/shortcuts` 配置三个快捷键：
+  - **切换页面高亮** — 快速开启/关闭当前页面的高亮
+  - **添加高亮** — 选中文字后按快捷键触发高亮并打开弹窗
+  - **高亮此处** — 选中文字后按快捷键仅高亮选中区域
+
+### 跨 iframe 与 Shadow DOM
+- 自动检测页面中的 iframe 和 Shadow DOM，注入高亮样式和匹配逻辑。
+- 设置页面中的 `match_origin_as_fallback` 确保跨域 iframe 也能正常高亮。
+
+## 安装
+
+### 开发者模式加载
+1. 克隆仓库：
+   ```
+   git clone https://github.com/dsqm/Auto-Rule-Highlighter.git
+   ```
+2. 打开 Chrome/Edge 浏览器，进入 `chrome://extensions`。
+3. 开启右上角的 **开发者模式**。
+4. 点击 **加载已解压的扩展程序**，选择 `auto-rule-highlighter` 文件夹。
+
+## 反馈与贡献
+
+欢迎参与项目改进：
+
+- **提交 Issue** &mdash; 遇到 Bug 或有功能建议，请到 [Issues 页](https://github.com/dsqm/Auto-Rule-Highlighter/issues) 提交，反馈bug时务必带上复现网站。
+- **Pull Request** &mdash; 代码贡献请先开 Issue 讨论，再提交 PR。
+
+*代码全是AI写的，有能力还是建议 PR*
+
+## 已知问题
+
+**这些问题可能是无解的**
+
+1. 部分网站页面，高亮会造成页面不刷新内容
+   例如[哔哩哔哩](https://www.bilibili.com/)>收益管理>充电计划 表格页面，如果进行高亮，翻页将不会刷新数据
+2. 部分网站滚动会丢失高亮
+   可尝试点击扩展图标进行刷新
+
+## 赞助
+
+https://docs.qq.com/aio/DRWtMY3FQS0ZHRGRG
+
+## 项目结构
+
+```
+auto-rule-highlighter/
+├── manifest.json           # 扩展清单
+├── background/
+│   └── background.js       # 后台服务 (规则管理、消息中转、图标角标)
+├── content/
+│   ├── content.js          # 内容脚本 (高亮引擎、右边栏、DOM 观察器)
+│   └── content.css         # 高亮与右边栏样式
+├── popup/
+│   ├── popup.html          # 弹窗界面
+│   └── popup.js            # 弹窗逻辑
+├── options/
+│   ├── options.html        # 设置页面
+│   ├── options.js          # 设置逻辑
+│   └── about.html          # 关于页面
+├── utils/
+│   ├── matcher.js          # 文本匹配工具
+│   └── storage.js          # Chrome Storage 封装
+├── icons/                  # 扩展图标
+└── LICENSE                 # GPL v3
+```
+
+## 许可证
+
+GNU General Public License v3.0。详见 [LICENSE](LICENSE)。
+
+Icons by [Icons8](https://icons8.com)。
