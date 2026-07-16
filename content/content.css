@@ -1,0 +1,51 @@
+ah-mark {
+  transition: outline 0.15s;
+  contain: layout style paint;
+}
+
+@keyframes ah-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+ah-mark.ah-blinking {
+  animation: ah-blink 0.3s ease-in-out 3;
+}
+
+ah-spot {
+  border-radius: 2px;
+  padding: 1px 0;
+}
+
+ah-spot.ah-blinking {
+  animation: ah-blink 0.3s ease-in-out 3;
+}
+
+ah-rail {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 16px;
+  height: 100vh;
+  z-index: 2147483646;
+  pointer-events: none;
+}
+
+ah-rail .ah-rail-mark {
+  position: absolute;
+  left: 2px;
+  width: 12px;
+  height: 6px;
+  min-height: 6px;
+  border-radius: 2px;
+  cursor: pointer;
+  pointer-events: auto;
+  opacity: 0.75;
+  transition: opacity 0.15s, width 0.15s, left 0.15s;
+}
+
+ah-rail .ah-rail-mark:hover {
+  opacity: 1;
+  width: 16px;
+  left: 0;
+}

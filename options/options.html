@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; color: #333; background: #f5f5f5; min-height: 100vh; }
+    .container { max-width: 900px; margin: 0 auto; padding: 30px 20px; }
+    h1 { font-size: 22px; margin-bottom: 24px; }
+    h2 { font-size: 16px; margin: 24px 0 12px; padding-bottom: 8px; border-bottom: 1px solid #e8e8e8; display: flex; align-items: center; justify-content: space-between; }
+    .card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+    .btn { padding: 6px 16px; border: 1px solid #d9d9d9; border-radius: 4px; background: #fff; cursor: pointer; font-size: 13px; color: #333; transition: all 0.2s; }
+    .btn:hover { border-color: #1890ff; color: #1890ff; }
+    .btn-primary { background: #1890ff; color: #fff; border-color: #1890ff; }
+    .btn-primary:hover { background: #40a9ff; }
+    .btn-danger { color: #ff4d4f; border-color: #ff4d4f; }
+    .btn-danger:hover { background: #fff1f0; }
+    .btn-sm { padding: 3px 10px; font-size: 12px; }
+    .empty { text-align: center; padding: 40px 20px; color: #999; }
+    .empty p { margin-bottom: 8px; }
+
+    .rule-card { background: #fff; border: 1px solid #e8e8e8; border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
+    .rule-header { display: flex; align-items: center; padding: 12px 16px; gap: 10px; border-bottom: 1px solid #f0f0f0; background: #fafafa; }
+    .rule-url { flex: 1; font-weight: 500; font-size: 14px; }
+    .rule-match-type { font-size: 11px; background: #e6f7ff; color: #1890ff; padding: 2px 8px; border-radius: 3px; }
+    .toggle { position: relative; width: 36px; height: 20px; cursor: pointer; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle .slider { position: absolute; inset: 0; background: #ccc; border-radius: 10px; transition: 0.2s; }
+    .toggle .slider::before { content: ''; position: absolute; width: 16px; height: 16px; left: 2px; top: 2px; background: #fff; border-radius: 50%; transition: 0.2s; }
+    .toggle input:checked + .slider { background: #1890ff; }
+    .toggle input:checked + .slider::before { transform: translateX(16px); }
+    .rule-actions { display: flex; gap: 6px; }
+
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; }
+    .form-group input, .form-group select { width: 100%; padding: 6px 10px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 13px; outline: none; }
+    .form-group input:focus, .form-group select:focus { border-color: #1890ff; }
+    .form-group .checkbox-row { display: flex; align-items: center; gap: 8px; }
+    .form-group .checkbox-row input { width: auto; }
+    .color-input { width: 50px !important; height: 32px; padding: 2px !important; cursor: pointer; }
+
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; z-index: 100; }
+    .modal { background: #fff; border-radius: 10px; padding: 24px; width: 440px; max-height: 80vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.15); }
+    .modal h3 { font-size: 16px; margin-bottom: 18px; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+
+    .settings-row { display: flex; align-items: center; margin-bottom: 0; gap: 12px; padding: 14px 0; border-bottom: 1px solid #f0f0f0; }
+    .settings-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .settings-sub-row { padding-left: 152px !important; border-bottom: none; padding-top: 4px; padding-bottom: 8px; }
+    .settings-row label { width: 140px; font-size: 13px; color: #666; flex-shrink: 0; }
+    .settings-row .field { flex: 1; }
+    .settings-row .hint { font-size: 11px; color: #999; margin-top: 2px; }
+
+    .export-import { display: flex; gap: 8px; margin-top: 12px; }
+    .toast { position: fixed; top: 20px; right: 20px; background: #52c41a; color: #fff; padding: 10px 20px; border-radius: 6px; font-size: 13px; opacity: 0; transition: opacity 0.3s; z-index: 1000; }
+    .toast.show { opacity: 1; }
+    .drag-handle { cursor: grab; padding: 4px 6px; color: #bbb; font-size: 14px; user-select: none; }
+    .drag-handle:hover { color: #1890ff; }
+    .drag-handle:active { cursor: grabbing; }
+    .dragging { opacity: 0.5; background: #e6f7ff; }
+    .drag-over { border-top: 2px solid #1890ff; }
+    .kw-move-btn { background: none; border: none; cursor: pointer; font-size: 12px; color: #bbb; padding: 0 2px; line-height: 1; user-select: none; }
+    .kw-move-btn:hover { color: #1890ff; }
+    .kw-move-btn:disabled { opacity: 0.3; cursor: default; }
+    .preset-color-block { width: 28px; height: 28px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: all 0.15s; position: relative; }
+    .preset-color-block:hover { transform: scale(1.15); border-color: #1890ff; }
+    .preset-color-block .preset-del { position: absolute; top: -5px; right: -5px; width: 14px; height: 14px; border-radius: 50%; background: #ff4d4f; color: #fff; font-size: 9px; line-height: 14px; text-align: center; cursor: pointer; display: none; }
+    .preset-color-block:hover .preset-del { display: block; }
+    .confirm-popup { position: fixed; background: #fff; border-radius: 8px; padding: 16px 20px; box-shadow: 0 6px 24px rgba(0,0,0,0.2); z-index: 300; font-size: 13px; text-align: center; }
+    .confirm-popup p { margin-bottom: 12px; color: #333; }
+    .confirm-popup .confirm-actions { display: flex; gap: 8px; justify-content: center; }
+    .kw-preset-dot { width: 16px; height: 16px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; flex-shrink: 0; transition: transform 0.15s; }
+    .kw-preset-dot:hover { transform: scale(1.2); border-color: #1890ff; }
+
+    .match-type-btn { font-size: 11px; padding: 3px 8px; border: 1px solid #d9d9d9; border-radius: 3px; background: #fafafa; color: #666; cursor: pointer; transition: all 0.15s; }
+    .match-type-btn:hover { border-color: #1890ff; color: #1890ff; }
+    .match-type-btn.active { background: #1890ff; color: #fff; border-color: #1890ff; }
+    .match-type-row { display: flex; gap: 4px; }
+    .toggle-opt-btn { font-size: 10px; padding: 3px 7px; border: 1px solid #e0e0e0; border-radius: 3px; background: #fafafa; color: #bbb; cursor: pointer; font-weight: 600; transition: all 0.15s; line-height: 1.4; }
+    .toggle-opt-btn:hover { border-color: #1890ff; }
+    .toggle-opt-btn.active { background: #e6f7ff; color: #1890ff; border-color: #91d5ff; }
+    .toggle-opt-btn.across { font-size: 12px; padding: 3px 5px; }
+
+    .storage-bar-wrap { flex: 1; min-width: 200px; }
+    .storage-bar-outer { width: 100%; height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden; margin-bottom: 6px; }
+    .storage-bar-inner { height: 100%; border-radius: 4px; background: #1890ff; transition: width 0.4s ease; }
+    .storage-bar-inner.warn { background: #fa8c16; }
+    .storage-bar-inner.danger { background: #ff4d4f; }
+    .storage-text { font-size: 11px; color: #999; }
+    .storage-text span { font-weight: 600; color: #333; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Auto Rule Highlighter 设置</h1>
+
+    <h2>
+      网站自动规则
+      <button class="btn btn-primary btn-sm" id="btnAddRule">+ 添加规则</button>
+    </h2>
+    <div id="ruleList"></div>
+
+    <h2>全局设置</h2>
+    <div class="card">
+      <div class="settings-row">
+        <label>显示右边栏标记</label>
+        <div class="field">
+          <input type="checkbox" id="settShowRail" checked>
+          <span style="font-size:12px;color:#999;margin-left:8px;">全局开关，关闭后所有规则均不显示右边栏标记</span>
+        </div>
+      </div>
+      <div class="settings-row" style="border-top:1px dashed #d0d0d0;border-bottom:none;padding-top:14px;">
+        <label>【添加高亮】</label>
+        <div class="field" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+          <label style="font-size:12px;color:#666;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;"><input type="checkbox" id="settContextMenuEnabled" checked> 添加右键菜单</label>
+          <label style="font-size:12px;color:#666;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;"><input type="checkbox" id="settOpenPopupOnAdd" checked> 右键运行后打开面板</label>
+          <label style="font-size:12px;color:#666;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;"><input type="checkbox" id="settOpenPopupOnAddShortcut" checked> 快捷键运行后打开面板</label>
+        </div>
+      </div>
+      <div class="settings-row" style="border-top:1px dashed #d0d0d0;border-bottom:1px dashed #d0d0d0;padding-bottom:14px;">
+        <label>【高亮此处】</label>
+        <div class="field" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+          <label style="font-size:12px;color:#666;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;"><input type="checkbox" id="settSpotContextMenuEnabled" checked> 添加右键菜单</label>
+          <label style="font-size:12px;color:#666;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;"><input type="checkbox" id="settOpenPopupOnSpot" checked> 右键运行后打开面板</label>
+          <label style="font-size:12px;color:#666;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;"><input type="checkbox" id="settOpenPopupOnSpotShortcut" checked> 快捷键运行后打开面板</label>
+        </div>
+      </div>
+      <div class="settings-row">
+        <label>记录输入历史</label>
+        <div class="field">
+          <input type="checkbox" id="settHistoryEnabled" checked>
+          <span style="font-size:12px;color:#999;margin-left:8px;">临时高亮输入内容自动记录，关闭后不再保存历史</span>
+        </div>
+      </div>
+      <div class="settings-row">
+        <label>默认设置</label>
+        <div class="field">
+          <div class="match-type-row" style="margin-bottom:4px;">
+            <span id="settDefaultMatchTypeRow">
+              <button class="match-type-btn active" data-match-type="contains">包含</button>
+              <button class="match-type-btn" data-match-type="exact">精确</button>
+              <button class="match-type-btn" data-match-type="regex">正则</button>
+              <button class="match-type-btn" data-match-type="wildcard">通配</button>
+            </span>
+            <span style="color:#d0d0d0;font-size:18px;line-height:1;flex-shrink:0;margin-left:2px;">│</span>
+            <button class="toggle-opt-btn" id="settDefaultCaseSensitive" title="区分大小写">Aa</button>
+            <button class="toggle-opt-btn across" id="settDefaultAcrossElements" title="跨元素匹配">↔</button>
+          </div>
+          <span style="font-size:12px;color:#999;">新增关键词时的默认匹配方式、大小写与跨元素</span>
+        </div>
+      </div>
+      <div class="settings-row">
+        <label>颜色预设</label>
+        <div class="field">
+          <div id="colorPresetsContainer" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;"></div>
+          <div style="display:flex;gap:6px;margin-top:6px;align-items:center;">
+            <button class="btn btn-sm" id="btnAddPreset">+ 添加预设</button>
+            <button class="btn btn-sm" id="btnResetPresets" title="恢复默认颜色">重置默认</button>
+          </div>
+          <span style="font-size:11px;color:#999;margin-top:4px;display:block;">点击颜色可修改，点击 × 删除。预设颜色用于临时高亮和规则关键词快速选择</span>
+        </div>
+      </div>
+      <div class="settings-row">
+        <label>数据管理</label>
+        <div class="field">
+          <div class="export-import">
+            <button class="btn btn-sm" id="btnExport">导出数据</button>
+            <button class="btn btn-sm" id="btnImport">导入数据</button>
+            <input type="file" id="importFile" accept=".json" style="display:none">
+            <button class="btn btn-sm btn-danger" id="btnClearAll">清空所有</button>
+          </div>
+        </div>
+      </div>
+      <div class="settings-row">
+        <label>存储用量</label>
+        <div class="field">
+          <div class="storage-bar-wrap">
+            <div class="storage-bar-outer">
+              <div class="storage-bar-inner" id="storageBar" style="width:0%;"></div>
+            </div>
+            <div class="storage-text" id="storageText">加载中...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p style="text-align:center;margin-top:16px;font-size:16px;color:#999;"><a href="about.html" style="color:#1890ff;text-decoration:none;">关于</a></p>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="../utils/matcher.js"></script>
+  <script src="../utils/storage.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

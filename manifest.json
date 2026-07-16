@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "Auto Rule Highlighter",
+  "version": "1.1.0",
+  "description": "根据规则自动高亮页面字符，支持正则、通配符，滚动条标记导航，临时高亮查询",
+  "permissions": ["storage", "activeTab", "tabs", "webNavigation", "contextMenus"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "all_frames": true,
+      "match_origin_as_fallback": true,
+      "js": ["utils/matcher.js", "utils/storage.js", "content/content.js"],
+      "css": ["content/content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "100": "icons/icon100.png"
+    }
+  },
+  "options_page": "options/options.html",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "100": "icons/icon100.png"
+  },
+  "commands": {
+    "toggle-page-highlight": {
+      "description": "切换当前页面高亮开关"
+    },
+    "add-highlight": {
+      "description": "添加高亮：将选中关键字添加并搜索"
+    },
+    "spot-highlight": {
+      "description": "高亮此处：仅高亮选中区域"
+    }
+  }
+}
