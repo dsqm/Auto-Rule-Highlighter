@@ -350,7 +350,7 @@
     highlightBatch(keywords, 0);
   }
 
-  function precomputeExclusiveStopOrder(keywords) {
+  function precomputeExclusiveStopOrder(keywords, textNodes) {
     var exclusiveKeywords = [];
     for (var i = 0; i < keywords.length; i++) {
       if (keywords[i].exclusive) exclusiveKeywords.push(keywords[i]);
@@ -376,7 +376,7 @@
       return;
     }
 
-    var textNodes = getAllTextNodes();
+    if (!textNodes) textNodes = getAllTextNodes();
     for (var j = 0; j < textNodes.length; j++) {
       var textNode = textNodes[j];
       if (!textNode || !textNode.isConnected) continue;
@@ -406,6 +406,7 @@
     if (!isInIframe && shouldShowRail()) createRail();
     setupBodyObserver();
     setupLazyHighlightScroll();
+    applyVisibility();
     if (!isInIframe) updateBadge();
     if (pendingNavigation) {
       var nav = pendingNavigation;
@@ -549,7 +550,7 @@
 
       for (var ap = 0; ap < allMatches.length; ap++) {
         var isTempKwAp = allMatches[ap].keywordId && allMatches[ap].keywordId.indexOf('tmp_') === 0;
-        allMatches[ap]._hide = !isTempKwAp && exclusiveStopOrder >= 0 && allMatches[ap].globalOrder > exclusiveStopOrder;
+        allMatches[ap]._hide = !isTempKwAp && exclusiveStopOrder >= 0 && !allMatches[ap].exclusive;
       }
       allMatches.sort(function (a, b) {
         if (a.start !== b.start) return a.start - b.start;
@@ -614,6 +615,7 @@
     }
 
     var textNodes = getAllTextNodes();
+    precomputeExclusiveStopOrder(keywords, textNodes);
     var nearNodes = [];
     for (var i = 0; i < textNodes.length; i++) {
       var node = textNodes[i];
@@ -641,7 +643,8 @@
       setTimeout(function () { lazyHighlightBatch(keywords, nodes, end); }, 0);
     } else {
       isLazyHighlighting = false;
-      if (!isInIframe) {
+      var visChanged = applyVisibility();
+      if (!visChanged && !isInIframe) {
         if (shouldShowRail()) { if (!railEl) createRail(); else renderRail(); }
         updateBadge();
       }
@@ -692,7 +695,7 @@
       if (highlightIndex > MAX_HIGHLIGHT_INDEX) highlightIndex = 0;
 
       var isTempKw = match.keywordId && match.keywordId.indexOf('tmp_') === 0;
-      var matchHide = match._hide !== undefined ? match._hide : (!isTempKw && exclusiveStopOrder >= 0 && match.globalOrder > exclusiveStopOrder);
+      var matchHide = match._hide !== undefined ? match._hide : (!isTempKw && exclusiveStopOrder >= 0 && !match.exclusive);
       if (matchHide) {
         mark.style.backgroundColor = 'transparent';
         mark.style.color = 'inherit';
@@ -717,11 +720,11 @@
     for (var i = 0; i < marks.length; i++) {
       var m = marks[i];
       var kwId = m.dataset.ahKeywordId;
-      var order = parseInt(m.dataset.ahGlobalOrder, 10);
       var isTempKw = kwId && kwId.indexOf('tmp_') === 0;
       var isManuallyShown = manualShowKwIds.indexOf(kwId) >= 0;
       var isManuallyHidden = hiddenKwIds.indexOf(kwId) >= 0;
-      var isHiddenByExclusive = !isTempKw && exclusiveStopOrder >= 0 && !isNaN(order) && order > exclusiveStopOrder;
+      var isExclusiveMark = m.dataset.ahExclusive === '1';
+      var isHiddenByExclusive = !isTempKw && exclusiveStopOrder >= 0 && !isExclusiveMark;
       
       if (isManuallyHidden && !isManuallyShown) continue;
       if (isHiddenByExclusive && !isManuallyShown) continue;
@@ -857,11 +860,11 @@
       if (h.dataset.ahShowRail !== '1') continue;
       var kwId = h.dataset.ahKeywordId;
       if (!kwId) continue;
-      var order = parseInt(h.dataset.ahGlobalOrder, 10);
       var isTempKw = kwId.indexOf('tmp_') === 0;
       var isManuallyShown = manualShowKwIds.indexOf(kwId) >= 0;
       var isManuallyHidden = hiddenKwIds.indexOf(kwId) >= 0;
-      var isHiddenByExclusive = !isTempKw && exclusiveStopOrder >= 0 && !isNaN(order) && order > exclusiveStopOrder;
+      var isExclusiveMark = h.dataset.ahExclusive === '1';
+      var isHiddenByExclusive = !isTempKw && exclusiveStopOrder >= 0 && !isExclusiveMark;
       
       if (isManuallyHidden && !isManuallyShown) continue;
       if (isHiddenByExclusive && !isManuallyShown) continue;
@@ -1004,7 +1007,7 @@
     if (allMatches.length === 0) return;
     for (var p = 0; p < allMatches.length; p++) {
       var isTempKwP = allMatches[p].keywordId && allMatches[p].keywordId.indexOf('tmp_') === 0;
-      allMatches[p]._hide = !isTempKwP && exclusiveStopOrder >= 0 && allMatches[p].globalOrder > exclusiveStopOrder;
+      allMatches[p]._hide = !isTempKwP && exclusiveStopOrder >= 0 && !allMatches[p].exclusive;
     }
     allMatches.sort(function (a, b) {
       if (a.start !== b.start) return a.start - b.start;
@@ -1071,34 +1074,42 @@
   function applyVisibility() {
     invalidateKeywordMapCache();
     var marks = getAllHighlightMarks();
+    var changed = false;
     for (var i = 0; i < marks.length; i++) {
       var m = marks[i];
       var kwId = m.dataset.ahKeywordId;
-      var order = parseInt(m.dataset.ahGlobalOrder, 10);
       var isTempKw = kwId && kwId.indexOf('tmp_') === 0;
       var isManuallyShown = manualShowKwIds.indexOf(kwId) >= 0;
-      var isHiddenByExclusive = !isTempKw && exclusiveStopOrder >= 0 && !isNaN(order) && order > exclusiveStopOrder;
+      var isExclusiveMark = m.dataset.ahExclusive === '1';
+      var isHiddenByExclusive = !isTempKw && exclusiveStopOrder >= 0 && !isExclusiveMark;
       var isManuallyHidden = hiddenKwIds.indexOf(kwId) >= 0;
 
       if (isManuallyHidden && !isManuallyShown) {
-        m.style.backgroundColor = 'transparent';
-        m.style.color = 'inherit';
-        m.style.padding = '0';
-        m.style.borderRadius = '0';
-        m.dataset.ahHidden = 'true';
+        if (m.dataset.ahHidden !== 'true') {
+          m.style.backgroundColor = 'transparent';
+          m.style.color = 'inherit';
+          m.style.padding = '0';
+          m.style.borderRadius = '0';
+          m.dataset.ahHidden = 'true';
+          changed = true;
+        }
         continue;
       }
 
       if (isHiddenByExclusive && !isManuallyShown) {
-        m.style.backgroundColor = 'transparent';
-        m.style.color = 'inherit';
-        m.style.padding = '0';
-        m.style.borderRadius = '0';
-        m.dataset.ahHidden = 'true';
+        if (m.dataset.ahHidden !== 'true') {
+          m.style.backgroundColor = 'transparent';
+          m.style.color = 'inherit';
+          m.style.padding = '0';
+          m.style.borderRadius = '0';
+          m.dataset.ahHidden = 'true';
+          changed = true;
+        }
         continue;
       }
 
       if (m.dataset.ahHidden === 'true' || isManuallyShown) {
+        var wasHidden = m.dataset.ahHidden === 'true';
         m.dataset.ahHidden = '';
         var color = currentSettings.defaultColor || '#ffeb3b';
         for (var j = 0; j < currentRules.length; j++) {
@@ -1120,13 +1131,15 @@
         m.style.color = getContrastColor(color);
         m.style.padding = '0';
         m.style.borderRadius = '2px';
+        if (wasHidden) changed = true;
       }
     }
-    if (!isInIframe) {
+    if (changed && !isInIframe) {
       if (shouldShowRail()) { if (!railEl) createRail(); else renderRail(); }
       else if (railEl) { railEl.remove(); railEl = null; }
       updateBadge();
     }
+    return changed;
   }
 
   function removeHighlights() {
