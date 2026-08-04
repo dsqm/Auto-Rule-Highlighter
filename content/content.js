@@ -112,9 +112,20 @@
       var keywordMap = {};
       var kwOrders = {};
       var kwExclusive = {};
+      var visibleTotal = 0;
       for (var i = 0; i < marks.length; i++) {
         var m = marks[i];
         var kwId = m.dataset.ahKeywordId;
+        if (!kwId) continue;
+        var order = parseInt(m.dataset.ahGlobalOrder, 10);
+        var isTempKw = kwId.indexOf('tmp_') === 0;
+        var isManuallyShown = manualShowKwIds.indexOf(kwId) >= 0;
+        var isManuallyHidden = hiddenKwIds.indexOf(kwId) >= 0;
+        var isHiddenByExclusive = !isTempKw && exclusiveStopOrder >= 0 && !isNaN(order) && order !== exclusiveStopOrder;
+        if (isManuallyHidden && !isManuallyShown) continue;
+        if (isHiddenByExclusive && !isManuallyShown) continue;
+        if (m.dataset.ahHidden === 'true' && !isManuallyShown) continue;
+        visibleTotal++;
         if (!keywordMap[kwId]) keywordMap[kwId] = 0;
         keywordMap[kwId]++;
         if (m.dataset.ahGlobalOrder !== undefined) {
@@ -125,7 +136,7 @@
         }
       }
       sendResponse({ 
-        total: marks.length, 
+        total: visibleTotal, 
         byKeyword: keywordMap, 
         hiddenIds: hiddenKwIds,
         manualShowIds: manualShowKwIds,
@@ -403,6 +414,7 @@
     batchTextNodes = null;
     isHighlighting = false;
     forceFullHighlight = false;
+    invalidateKeywordMapCache();
     if (!isInIframe && shouldShowRail()) createRail();
     setupBodyObserver();
     setupLazyHighlightScroll();
@@ -550,7 +562,7 @@
 
       for (var ap = 0; ap < allMatches.length; ap++) {
         var isTempKwAp = allMatches[ap].keywordId && allMatches[ap].keywordId.indexOf('tmp_') === 0;
-        allMatches[ap]._hide = !isTempKwAp && exclusiveStopOrder >= 0 && !allMatches[ap].exclusive;
+        allMatches[ap]._hide = !isTempKwAp && exclusiveStopOrder >= 0 && allMatches[ap].globalOrder !== exclusiveStopOrder;
       }
       allMatches.sort(function (a, b) {
         if (a.start !== b.start) return a.start - b.start;
@@ -695,7 +707,7 @@
       if (highlightIndex > MAX_HIGHLIGHT_INDEX) highlightIndex = 0;
 
       var isTempKw = match.keywordId && match.keywordId.indexOf('tmp_') === 0;
-      var matchHide = match._hide !== undefined ? match._hide : (!isTempKw && exclusiveStopOrder >= 0 && !match.exclusive);
+      var matchHide = match._hide !== undefined ? match._hide : (!isTempKw && exclusiveStopOrder >= 0 && match.globalOrder !== exclusiveStopOrder);
       if (matchHide) {
         mark.style.backgroundColor = 'transparent';
         mark.style.color = 'inherit';
@@ -720,11 +732,11 @@
     for (var i = 0; i < marks.length; i++) {
       var m = marks[i];
       var kwId = m.dataset.ahKeywordId;
+      var order = parseInt(m.dataset.ahGlobalOrder, 10);
       var isTempKw = kwId && kwId.indexOf('tmp_') === 0;
       var isManuallyShown = manualShowKwIds.indexOf(kwId) >= 0;
       var isManuallyHidden = hiddenKwIds.indexOf(kwId) >= 0;
-      var isExclusiveMark = m.dataset.ahExclusive === '1';
-      var isHiddenByExclusive = !isTempKw && exclusiveStopOrder >= 0 && !isExclusiveMark;
+      var isHiddenByExclusive = !isTempKw && exclusiveStopOrder >= 0 && !isNaN(order) && order !== exclusiveStopOrder;
       
       if (isManuallyHidden && !isManuallyShown) continue;
       if (isHiddenByExclusive && !isManuallyShown) continue;
@@ -860,11 +872,11 @@
       if (h.dataset.ahShowRail !== '1') continue;
       var kwId = h.dataset.ahKeywordId;
       if (!kwId) continue;
+      var order = parseInt(h.dataset.ahGlobalOrder, 10);
       var isTempKw = kwId.indexOf('tmp_') === 0;
       var isManuallyShown = manualShowKwIds.indexOf(kwId) >= 0;
       var isManuallyHidden = hiddenKwIds.indexOf(kwId) >= 0;
-      var isExclusiveMark = h.dataset.ahExclusive === '1';
-      var isHiddenByExclusive = !isTempKw && exclusiveStopOrder >= 0 && !isExclusiveMark;
+      var isHiddenByExclusive = !isTempKw && exclusiveStopOrder >= 0 && !isNaN(order) && order !== exclusiveStopOrder;
       
       if (isManuallyHidden && !isManuallyShown) continue;
       if (isHiddenByExclusive && !isManuallyShown) continue;
@@ -1007,7 +1019,7 @@
     if (allMatches.length === 0) return;
     for (var p = 0; p < allMatches.length; p++) {
       var isTempKwP = allMatches[p].keywordId && allMatches[p].keywordId.indexOf('tmp_') === 0;
-      allMatches[p]._hide = !isTempKwP && exclusiveStopOrder >= 0 && !allMatches[p].exclusive;
+      allMatches[p]._hide = !isTempKwP && exclusiveStopOrder >= 0 && allMatches[p].globalOrder !== exclusiveStopOrder;
     }
     allMatches.sort(function (a, b) {
       if (a.start !== b.start) return a.start - b.start;
@@ -1078,10 +1090,10 @@
     for (var i = 0; i < marks.length; i++) {
       var m = marks[i];
       var kwId = m.dataset.ahKeywordId;
+      var order = parseInt(m.dataset.ahGlobalOrder, 10);
       var isTempKw = kwId && kwId.indexOf('tmp_') === 0;
       var isManuallyShown = manualShowKwIds.indexOf(kwId) >= 0;
-      var isExclusiveMark = m.dataset.ahExclusive === '1';
-      var isHiddenByExclusive = !isTempKw && exclusiveStopOrder >= 0 && !isExclusiveMark;
+      var isHiddenByExclusive = !isTempKw && exclusiveStopOrder >= 0 && !isNaN(order) && order !== exclusiveStopOrder;
       var isManuallyHidden = hiddenKwIds.indexOf(kwId) >= 0;
 
       if (isManuallyHidden && !isManuallyShown) {

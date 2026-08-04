@@ -344,7 +344,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (count === 0) continue;
         var order = kwOrders[kw.id];
         var isExclusive = kwExclusive[kw.id] || kw.exclusive || false;
-        var isHiddenByExclusive = exclusiveStopOrder >= 0 && typeof order === 'number' && order > exclusiveStopOrder;
+        var isHiddenByExclusive = exclusiveStopOrder >= 0 && typeof order === 'number' && order !== exclusiveStopOrder;
         allKws.push({
           id: kw.id,
           text: kw.text,
@@ -773,7 +773,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (action === 'toggle-rule-kw') {
       var order = kwOrders[kwId];
-      var isHiddenByExclusive = exclusiveStopOrder >= 0 && typeof order === 'number' && order > exclusiveStopOrder;
+      var isHiddenByExclusive = exclusiveStopOrder >= 0 && typeof order === 'number' && order !== exclusiveStopOrder;
       var isManuallyShown = manualShowKwIds.has(kwId);
       var isManuallyHidden = hiddenKwIds.has(kwId);
       var isEffectivelyHidden = isManuallyHidden || (isHiddenByExclusive && !isManuallyShown);
