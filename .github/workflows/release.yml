@@ -1,0 +1,153 @@
+name: Release on version bump
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: 检测版本号并发布 Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 检测版本号变化
+        id: version
+        run: |
+          set -euo pipefail
+
+          NEW_VER=$(jq -r '.version' manifest.json)
+          if [ -z "$NEW_VER" ] || [ "$NEW_VER" = "null" ]; then
+            echo "::error::无法从 manifest.json 中读取 version 字段"
+            exit 1
+          fi
+          TAG="v${NEW_VER}"
+          echo "manifest.json 版本号: ${NEW_VER}"
+
+          git fetch --tags --force
+          PREV_TAG=$(git tag --list 'v*' --sort=-v:refname | head -n 1 || true)
+          PREV_VER="${PREV_TAG#v}"
+          echo "仓库中最新版本标签: ${PREV_TAG:-<无>}"
+
+          # 标签已存在（重复运行 / 手动重跑）→ 跳过
+          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "标签 ${TAG} 已存在，跳过发布"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # 无历史标签 → 视为首次发布；否则要求新版本号大于上一个版本
+          if [ -z "$PREV_VER" ]; then
+            CHANGED=true
+          else
+            HIGHEST=$(printf '%s\n%s\n' "$PREV_VER" "$NEW_VER" | sort -V | tail -n 1)
+            if [ "$HIGHEST" = "$NEW_VER" ] && [ "$NEW_VER" != "$PREV_VER" ]; then
+              CHANGED=true
+            else
+              CHANGED=false
+            fi
+          fi
+
+          echo "changed=${CHANGED}" >> "$GITHUB_OUTPUT"
+          echo "version=${NEW_VER}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "prev_tag=${PREV_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: 打包扩展
+        if: steps.version.outputs.changed == 'true'
+        id: package
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          ZIP_NAME="Auto-Rule-Highlighter_${VERSION}.zip"
+          ROOT_DIR="Auto-Rule-Highlighter"
+
+          rm -f "$ZIP_NAME"
+          # 只打包 Git 已跟踪的文件，并统一放进 Auto-Rule-Highlighter/ 目录，便于解压
+          # 排除 .github / .gitattributes / .gitignore 等与扩展运行无关的内容
+          git archive --format=zip --prefix="${ROOT_DIR}/" -o "$ZIP_NAME" HEAD \
+            ":(exclude).github" \
+            ":(exclude).gitattributes" \
+            ":(exclude).gitignore"
+
+          echo "name=${ZIP_NAME}" >> "$GITHUB_OUTPUT"
+          echo "### 打包结果" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          unzip -l "$ZIP_NAME" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 生成更新说明
+        if: steps.version.outputs.changed == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+          PREV_TAG: ${{ steps.version.outputs.prev_tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          NOTES="RELEASE_NOTES.md"
+
+          {
+            echo "## 更新内容"
+            echo
+            if [ -n "$PREV_TAG" ]; then
+              git log --no-merges --pretty=format:'- %s (%h)' "${PREV_TAG}..HEAD"
+            else
+              git log --no-merges --pretty=format:'- %s (%h)' HEAD
+            fi
+            echo
+            echo
+            echo "## 安装方式"
+            echo
+            echo "1. 下载 **Auto-Rule-Highlighter_${VERSION}.zip** 并解压"
+            echo "2. 浏览器打开 \`chrome://extensions\`，开启「开发者模式」"
+            echo "3. 点击「加载已解压的扩展程序」，选择解压出的 \`Auto-Rule-Highlighter\` 文件夹"
+            echo
+            echo "## 变更对比"
+            echo
+            if [ -n "$PREV_TAG" ]; then
+              echo "**Full Changelog**: [${PREV_TAG}...${TAG}](https://github.com/${REPO}/compare/${PREV_TAG}...${TAG})"
+            else
+              echo "**Full Changelog**: [${TAG}](https://github.com/${REPO}/commits/${TAG})"
+            fi
+          } > "$NOTES"
+
+          cat "$NOTES"
+
+      - name: 发布 Release
+        if: steps.version.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+          ZIP_NAME: ${{ steps.package.outputs.name }}
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes-file RELEASE_NOTES.md \
+            "$ZIP_NAME"
+          echo "已发布 $TAG" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 版本号未变化，跳过
+        if: steps.version.outputs.changed != 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          echo "manifest.json 版本号未发生变化（当前 ${VERSION}），不发布新版本。" | tee "$GITHUB_STEP_SUMMARY"
