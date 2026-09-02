@@ -345,7 +345,7 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
             // 去重 key 覆盖全部样式字段，避免同文本不同样式的临时关键词被误合并
             var key = item.text + '|' + item.color + '|' + item.matchType +
               '|' + (item.fontSize || 1) +
-              '|' + (item.textColor || '') +
+              '|' + (item.textColor === undefined ? '' : (item.textColor === null ? '@auto' : item.textColor)) +
               '|' + (item.bold ? '1' : '0') +
               '|' + (item.italic ? '1' : '0') +
               '|' + (item.underline ? '1' : '0') +

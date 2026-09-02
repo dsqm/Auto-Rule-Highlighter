@@ -3,10 +3,10 @@
 var StyleKit = (function () {
   'use strict';
 
-  // 内置兜底：预设被删空时使用
+  // 内置兜底：预设被删空时使用（textColor 用 'inherit' 保持原色，不默认自动反色）
   var BUILTIN_DEFAULT = {
     bgColor: '#ffeb3b',
-    textColor: null,
+    textColor: 'inherit',
     fontSize: 1,
     bold: false,
     italic: false,
@@ -37,7 +37,7 @@ var StyleKit = (function () {
   function blankStyle() {
     return {
       bgColor: '',
-      textColor: null,
+      textColor: 'inherit',
       fontSize: 1,
       bold: false,
       italic: false,
@@ -61,7 +61,7 @@ var StyleKit = (function () {
       p.bgColor = raw;
     } else if (raw && typeof raw === 'object') {
       p.bgColor = typeof raw.bgColor === 'string' ? raw.bgColor : '';
-      p.textColor = raw.textColor === undefined ? null : raw.textColor;
+      p.textColor = raw.textColor === undefined ? 'inherit' : raw.textColor;
       p.fontSize = clampFontSize(raw.fontSize);
       p.bold = raw.bold === true;
       p.italic = raw.italic === true;
@@ -70,9 +70,9 @@ var StyleKit = (function () {
       if (raw.id) p.id = raw.id;
     }
     if (!p.id) p.id = uid();
-    // 文字颜色只允许 null（自动反色）/ 'inherit'（保持原色）/ '#rrggbb'
+    // 文字颜色：null（自动反色）/ 'inherit'（保持原色）/ '#rrggbb'；非法值归为保持原色
     if (p.textColor !== null && p.textColor !== 'inherit') {
-      if (typeof p.textColor !== 'string' || p.textColor.charAt(0) !== '#') p.textColor = null;
+      if (typeof p.textColor !== 'string' || p.textColor.charAt(0) !== '#') p.textColor = 'inherit';
     }
     return p;
   }
@@ -146,9 +146,10 @@ var StyleKit = (function () {
     return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.5 ? '#000000' : '#ffffff';
   }
 
-  // 文字颜色：'#xxx'=自定义；未设置（undefined / null）= 保持页面原色（不再自动反色）
+  // 文字颜色：'#xxx'=自定义；null=自动反色（按背景亮度取黑/白）；其余（undefined/'inherit'）= 保持页面原色
   function resolveTextColor(style) {
     if (typeof style.textColor === 'string' && style.textColor.charAt(0) === '#') return style.textColor;
+    if (style.textColor === null) return contrastColor(style.bgColor);
     return 'inherit';
   }
 
@@ -190,12 +191,14 @@ var StyleKit = (function () {
   // 预览块：只有背景 -> 整块填充；只有文字色 -> 文字 + 外框；只有字号 -> 纯块 + 右上角 +/− 角标
   /**
    * 样式是否显式定义了文本样式（文字色 / 字形）。
-   * 未设置文字颜色（undefined / null）= 保持页面原色，不算「定义了文字颜色」；
+   * 自动反色（null）或自定义文字色（'#xxx'）都算「定义了文字颜色」；
+   * 未设置（undefined / 'inherit'）= 保持页面原色，不算；
    * 字号不算文本样式——只有字号差异时预览不渲染 Aa，仅以 +/− 角标表达，
    * 否则「没调文字却出现文字」的预览会产生误导。
    */
   function styleHasText(style) {
     if (!style) return false;
+    if (style.textColor === null) return true;
     if (typeof style.textColor === 'string' && style.textColor.charAt(0) === '#') return true;
     if (style.bold || style.italic || style.underline || style.strike) return true;
     return false;
@@ -343,6 +346,11 @@ var StyleKit = (function () {
         if (clampFontSize(va) !== clampFontSize(vb)) return false;
       } else if (k === 'bold' || k === 'italic' || k === 'underline' || k === 'strike') {
         if (!!va !== !!vb) return false;
+      } else if (k === 'textColor') {
+        // 区分 null（自动反色）与 undefined/'inherit'（保持原色）
+        var na = va === undefined ? '' : (va === null ? '@auto' : (va || ''));
+        var nb = vb === undefined ? '' : (vb === null ? '@auto' : (vb || ''));
+        if (na !== nb) return false;
       } else {
         if ((va || '') !== (vb || '')) return false;
       }
@@ -356,7 +364,11 @@ var StyleKit = (function () {
     for (var i = 0; i < STYLE_KEYS.length; i++) {
       var f = KEYWORD_FIELDS[STYLE_KEYS[i]];
       var v = kw[f];
-      if (v === undefined || v === null) continue;
+      if (v === undefined || v === null) {
+        // textColor=null 是显式「自动反色」，不算继承；其余 null 视为未设置
+        if (STYLE_KEYS[i] === 'textColor' && v === null) return false;
+        continue;
+      }
       // 背景色空串 = 显式「无背景」，是有效设置
       if (v === '' && f !== 'color') continue;
       return false;
@@ -366,7 +378,8 @@ var StyleKit = (function () {
 
   // 取出对象上显式写过的样式（未显式设置的字段留 undefined）。
   // 兼容两种字段名：关键词对象用 color，样式/预设对象用 bgColor。
-  // 背景色空串（透明）是有效值，保留；其余字段的空串/空值丢弃
+  // 背景色空串（透明）是有效值，保留；其余字段的空串/空值丢弃。
+  // textColor=null（自动反色）是有效值，保留。
   function keywordOverrides(kw) {
     var o = {};
     if (!kw) return o;
@@ -375,8 +388,9 @@ var StyleKit = (function () {
       var f = KEYWORD_FIELDS[k];
       var v = kw[f];
       if (v === undefined || v === null) v = kw[k];
-      if (v === undefined || v === null) continue;
+      if (v === undefined) continue;
       if (v === '' && k !== 'bgColor') continue;
+      if (v === null && k !== 'textColor') continue;
       o[k] = v;
     }
     return o;
@@ -416,7 +430,7 @@ var StyleKit = (function () {
     if (!style) return '';
     return [
       style.bgColor || '',
-      style.textColor === undefined || style.textColor === null ? '' : style.textColor,
+      style.textColor === undefined ? '' : (style.textColor === null ? '@auto' : style.textColor),
       clampFontSize(style.fontSize),
       style.bold ? '1' : '0',
       style.italic ? '1' : '0',
