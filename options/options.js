@@ -516,25 +516,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         <h3>管理关键词 — ${escapeHtml(displayName)}</h3>
         <div class="form-group">
           <label>新增关键词</label>
-          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
             <input type="text" id="kwName" placeholder="名称（可选）" style="width:90px;padding:6px 10px;border:1px solid #d9d9d9;border-radius:4px;font-size:13px;outline:none;">
             <input type="text" id="kwText" placeholder="输入关键词" style="flex:1;min-width:120px;padding:6px 10px;border:1px solid #d9d9d9;border-radius:4px;font-size:13px;outline:none;">
-            <select id="kwMatchType" style="padding:5px 8px;border:1px solid #d9d9d9;border-radius:4px;font-size:12px;">
-              <option value="contains">包含</option>
-              <option value="exact">精确</option>
-              <option value="regex">正则</option>
-              <option value="wildcard">通配</option>
-            </select>
-            <!-- 管理关键词弹窗：当前样式方块 与 预设圆 之间的分隔线（.v-sep） -->
-            <span id="kwStylePreview" title="当前样式，点击编辑" style="cursor:pointer;"></span>
-            <span class="v-sep"></span>
-            <div id="kwPresetsRow" style="display:flex;gap:4px;align-items:center;"></div>
-            <button class="toggle-opt-btn" id="kwCaseSensitive" title="区分大小写" type="button">Aa</button>
-            <button class="toggle-opt-btn across" id="kwAcrossElements" title="跨元素匹配" type="button">↔</button>
-            <label style="font-size:11px;display:flex;align-items:center;gap:2px;white-space:nowrap;"><input type="checkbox" id="kwShowRail" checked> 右边栏</label>
-            <label style="font-size:11px;display:flex;align-items:center;gap:2px;white-space:nowrap;"><input type="checkbox" id="kwExclusive"> ⭐独占高亮</label>
             <button class="btn btn-primary btn-sm" id="kwAddBtn">添加</button>
           </div>
+          <!-- 共享样式选项栏（mountStyleBar）：匹配类型 + Aa/↔ + 右边栏/独占 + 当前样式方块 + 预设圆 -->
+          <div id="kwStyleBar"></div>
         </div>
         <div style="margin-bottom:8px;font-size:12px;color:#999;">已有 <span id="kwCountBadge">${(rule.keywords || []).length}</span> 个关键词</div>
         <div id="kwListContainer" style="max-height:360px;overflow-y:auto;border:1px solid #f0f0f0;border-radius:4px;padding:4px 8px;"></div>
@@ -545,20 +533,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       </div>
     `;
     document.body.appendChild(overlay);
-    var kwMgrSel = overlay.querySelector('#kwMatchType');
-    if (kwMgrSel) kwMgrSel.value = defMatchType;
-    var kwMgrCase = overlay.querySelector('#kwCaseSensitive');
-    if (kwMgrCase) kwMgrCase.classList.toggle('active', defCaseSensitive);
-    var kwMgrAcross = overlay.querySelector('#kwAcrossElements');
-    if (kwMgrAcross) kwMgrAcross.classList.toggle('active', defAcrossElements);
 
-    overlay.querySelector('#kwCaseSensitive').addEventListener('click', function (e) {
-      e.stopPropagation();
-      this.classList.toggle('active');
-    });
-    overlay.querySelector('#kwAcrossElements').addEventListener('click', function (e) {
-      e.stopPropagation();
-      this.classList.toggle('active');
+    // 共享样式选项栏（与 popup 搜索区同组件）——匹配类型 / Aa / ↔ / 右边栏 / 独占 / 当前样式方块 / 预设圆
+    var kwStyleBar = StyleEditor.mountStyleBar(overlay.querySelector('#kwStyleBar'), {
+      presets: stylePresets,
+      settings: currentSettings,
+      matchType: defMatchType,
+      caseSensitive: defCaseSensitive,
+      acrossElements: defAcrossElements,
+      showRail: true,
+      showExtra: true,
+      onEditStyle: openNewKwStyleModal
     });
 
     function renderKeywordList() {
@@ -605,36 +590,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     renderKeywordList();
 
-    // 新增关键词的样式状态：预设单击套用 / 自定义按钮打开编辑弹窗
-    var newKwStyle = {};
-
-    /** 最左侧的当前样式预览（点击 = 编辑） */
-    function renderKwPreview() {
-      var pv = overlay.querySelector('#kwStylePreview');
-      if (pv) StyleKit.renderPreview(pv, StyleKit.resolveStyle(newKwStyle, currentSettings), 28, 28);
-    }
-
-    function renderKwPresets() {
-      var row = overlay.querySelector('#kwPresetsRow');
-      if (!row) return;
-      row.innerHTML = '';
-      stylePresets.forEach(function (p) {
-        var dot = document.createElement('span');
-        dot.className = 'kw-preset-dot' + (StyleKit.styleEquals(p, newKwStyle) ? ' selected' : '');
-        StyleKit.renderPresetDot(dot, p, 28);
-        dot.title = '套用此样式';
-        dot.addEventListener('click', function () {
-          newKwStyle = StyleKit.cloneStyle(p);
-          renderKwPresets();
-          renderKwPreview();
-        });
-        row.appendChild(dot);
-      });
-      renderKwPreview();
-    }
-    renderKwPresets();
-
-    // 自定义样式：与临时高亮同款交互 —— 弹窗内编辑完整样式
+    // 自定义样式：与临时高亮同款交互 —— 弹窗内编辑完整样式（组件 state.style 为当前样式）
     function openNewKwStyleModal() {
       const overlay2 = document.createElement('div');
       overlay2.className = 'modal-overlay';
@@ -649,18 +605,15 @@ document.addEventListener('DOMContentLoaded', async () => {
           </div>
         </div>`;
       document.body.appendChild(overlay2);
+      var curStyle = kwStyleBar.getState().style;
       // 样式编辑弹窗不支持点击外部关闭：调色/调字号时误点灰底会直接丢改动，必须显式取消/确定
-      var ed = mountStyleEditor(overlay2.querySelector('#newKwStyleBody'), StyleKit.resolveStyle(newKwStyle, currentSettings), StyleKit.keywordOverrides(newKwStyle), { bgColor: (stylePresets[0] || {}).bgColor });
+      var ed = mountStyleEditor(overlay2.querySelector('#newKwStyleBody'), StyleKit.resolveStyle(curStyle, currentSettings), StyleKit.keywordOverrides(curStyle), { bgColor: (stylePresets[0] || {}).bgColor });
       overlay2.querySelector('#newKwStyleCancel').addEventListener('click', function () { overlay2.remove(); });
       overlay2.querySelector('#newKwStyleSave').addEventListener('click', function () {
-        newKwStyle = ed.read();
-        renderKwPresets();
+        kwStyleBar.setState({ style: ed.read() });
         overlay2.remove();
       });
     }
-
-    var kwPreviewEl = overlay.querySelector('#kwStylePreview');
-    if (kwPreviewEl) kwPreviewEl.addEventListener('click', openNewKwStyleModal);
 
     const kwTextEl = overlay.querySelector('#kwText');
     const kwAddBtn = overlay.querySelector('#kwAddBtn');
@@ -669,27 +622,27 @@ document.addEventListener('DOMContentLoaded', async () => {
       const text = kwTextEl.value.trim();
       if (!text) return;
       const nameVal = overlay.querySelector('#kwName').value.trim();
+      const st = kwStyleBar.getState();
       await Storage.addKeyword(ruleId, {
         text: text,
         name: nameVal || '',
-        matchType: overlay.querySelector('#kwMatchType').value,
-        color: newKwStyle.bgColor,
-        textColor: newKwStyle.textColor,
-        fontSize: newKwStyle.fontSize,
-        bold: newKwStyle.bold,
-        italic: newKwStyle.italic,
-        underline: newKwStyle.underline,
-        strike: newKwStyle.strike,
-        caseSensitive: overlay.querySelector('#kwCaseSensitive').classList.contains('active'),
-        acrossElements: overlay.querySelector('#kwAcrossElements').classList.contains('active'),
-        showRail: overlay.querySelector('#kwShowRail').checked,
-        exclusive: overlay.querySelector('#kwExclusive').checked
+        matchType: st.matchType,
+        color: st.style.bgColor,
+        textColor: st.style.textColor,
+        fontSize: st.style.fontSize,
+        bold: st.style.bold,
+        italic: st.style.italic,
+        underline: st.style.underline,
+        strike: st.style.strike,
+        caseSensitive: st.caseSensitive,
+        acrossElements: st.acrossElements,
+        showRail: st.showRail,
+        exclusive: st.exclusive
       });
       kwTextEl.value = '';
       overlay.querySelector('#kwName').value = '';
       // 添加后样式复位到全局默认，避免连续添加时沿用上一次的样式
-      newKwStyle = {};
-      renderKwPresets();
+      kwStyleBar.setState({ style: {} });
       notifyRulesChanged();
       renderKeywordList();
     }
@@ -752,46 +705,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           <input type="text" id="editKwText" value="${escapeHtml(kw.text)}" placeholder="输入关键词" style="width:100%;padding:6px 10px;border:1px solid #d9d9d9;border-radius:4px;font-size:13px;outline:none;">
         </div>
         <div class="form-group">
-          <label>匹配方式</label>
-          <select id="editKwMatchType">
-            <option value="contains" ${kw.matchType === 'contains' ? 'selected' : ''}>包含</option>
-            <option value="exact" ${kw.matchType === 'exact' ? 'selected' : ''}>精确匹配</option>
-            <option value="regex" ${kw.matchType === 'regex' ? 'selected' : ''}>正则表达式</option>
-            <option value="wildcard" ${kw.matchType === 'wildcard' ? 'selected' : ''}>通配符</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>样式</label>
-          <!-- 编辑关键词样式弹窗：当前样式方块 与 预设圆 之间的分隔线（.v-sep） -->
-          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-            <span id="editKwStylePreview" title="当前样式，点击编辑" style="cursor:pointer;"></span>
-            <span class="v-sep"></span>
-            <div id="editKwPresets" style="display:flex;gap:4px;flex-wrap:wrap;"></div>
-          </div>
-        </div>
-        <div class="form-group">
-          <div class="checkbox-row">
-            <button class="toggle-opt-btn" id="editKwCaseSensitive" type="button">Aa</button>
-            <label for="editKwCaseSensitive" style="font-size:12px;">区分大小写</label>
-          </div>
-        </div>
-        <div class="form-group">
-          <div class="checkbox-row">
-            <button class="toggle-opt-btn across" id="editKwAcrossElements" type="button">↔</button>
-            <label for="editKwAcrossElements" style="font-size:12px;">跨元素匹配</label>
-          </div>
-        </div>
-        <div class="form-group">
-          <div class="checkbox-row">
-            <input type="checkbox" id="editKwShowRail" ${kw.showRail !== false ? 'checked' : ''}>
-            <label for="editKwShowRail">显示右边栏标记</label>
-          </div>
-        </div>
-        <div class="form-group">
-          <div class="checkbox-row">
-            <input type="checkbox" id="editKwExclusive" ${kw.exclusive ? 'checked' : ''}>
-            <label for="editKwExclusive">⭐ 匹配后独占高亮（出现后隐藏其他关键词的高亮）</label>
-          </div>
+          <label>匹配方式与样式</label>
+          <!-- 共享样式选项栏（mountStyleBar）：匹配类型 + Aa/↔ + 右边栏/独占 + 当前样式方块 + 预设圆 -->
+          <div id="editKwStyleBar"></div>
         </div>
         <div class="modal-actions">
           <button class="btn" id="editKwCancel">取消</button>
@@ -801,37 +717,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     `;
     document.body.appendChild(overlay);
 
-    overlay.querySelector('#editKwCaseSensitive').classList.toggle('active', kw.caseSensitive === true);
-    overlay.querySelector('#editKwAcrossElements').classList.toggle('active', kw.acrossElements === true);
-
-    // 编辑态样式：初始值 = 关键词覆写后的完整样式（继承关系在此解析）
-    var editStyle = StyleKit.resolveStyle(kw, currentSettings);
-
-    /** 最左侧的当前样式预览（点击 = 编辑） */
-    function renderEditPreview() {
-      var pv = overlay.querySelector('#editKwStylePreview');
-      if (pv) StyleKit.renderPreview(pv, editStyle, 28, 28);
-    }
-
-    function renderEditPresets() {
-      var container = overlay.querySelector('#editKwPresets');
-      if (!container) return;
-      container.innerHTML = '';
-      stylePresets.forEach(function (p) {
-        var dot = document.createElement('span');
-        dot.className = 'kw-preset-dot' + (StyleKit.styleEquals(p, editStyle) ? ' selected' : '');
-        StyleKit.renderPresetDot(dot, p, 28);
-        dot.title = '套用此样式';
-        dot.addEventListener('click', function () {
-          editStyle = StyleKit.cloneStyle(p);
-          renderEditPresets();
-          renderEditPreview();
-        });
-        container.appendChild(dot);
-      });
-      renderEditPreview();
-    }
-    renderEditPresets();
+    // 共享样式选项栏（与 popup 搜索区同组件）
+    var editStyleBar = StyleEditor.mountStyleBar(overlay.querySelector('#editKwStyleBar'), {
+      presets: stylePresets,
+      settings: currentSettings,
+      matchType: kw.matchType,
+      caseSensitive: kw.caseSensitive === true,
+      acrossElements: kw.acrossElements === true,
+      showRail: kw.showRail !== false,
+      exclusive: kw.exclusive === true,
+      currentStyle: StyleKit.keywordOverrides(kw),
+      showExtra: true,
+      onEditStyle: openEditStyleModal
+    });
 
     // 自定义样式：弹窗编辑完整样式（与新增/临时高亮同一套编辑器）
     function openEditStyleModal() {
@@ -848,44 +746,34 @@ document.addEventListener('DOMContentLoaded', async () => {
           </div>
         </div>`;
       document.body.appendChild(overlay2);
+      var curStyle = editStyleBar.getState().style;
       // 样式编辑弹窗不支持点击外部关闭：调色/调字号时误点灰底会直接丢改动，必须显式取消/确定
-      var ed = mountStyleEditor(overlay2.querySelector('#editKwStyleBody'), editStyle, StyleKit.keywordOverrides(kw), { bgColor: (stylePresets[0] || {}).bgColor });
+      var ed = mountStyleEditor(overlay2.querySelector('#editKwStyleBody'), StyleKit.resolveStyle(curStyle, currentSettings), StyleKit.keywordOverrides(curStyle), { bgColor: (stylePresets[0] || {}).bgColor });
       overlay2.querySelector('#editStyleCancel').addEventListener('click', function () { overlay2.remove(); });
       overlay2.querySelector('#editStyleSave').addEventListener('click', function () {
-        editStyle = ed.read();
-        renderEditPresets();
+        editStyleBar.setState({ style: ed.read() });
         overlay2.remove();
       });
     }
-    var editPreviewEl = overlay.querySelector('#editKwStylePreview');
-    if (editPreviewEl) editPreviewEl.addEventListener('click', openEditStyleModal);
-
-    overlay.querySelector('#editKwCaseSensitive').addEventListener('click', function (e) {
-      e.stopPropagation();
-      this.classList.toggle('active');
-    });
-    overlay.querySelector('#editKwAcrossElements').addEventListener('click', function (e) {
-      e.stopPropagation();
-      this.classList.toggle('active');
-    });
 
     overlay.querySelector('#editKwCancel').addEventListener('click', () => { overlay.remove(); });
     overlay.querySelector('#editKwSave').addEventListener('click', async () => {
+      const st = editStyleBar.getState();
       await Storage.updateKeyword(ruleId, kw.id, {
         name: overlay.querySelector('#editKwName').value.trim(),
         text: overlay.querySelector('#editKwText').value.trim(),
-        matchType: overlay.querySelector('#editKwMatchType').value,
-        color: editStyle.bgColor,
-        textColor: editStyle.textColor,
-        fontSize: editStyle.fontSize,
-        bold: editStyle.bold,
-        italic: editStyle.italic,
-        underline: editStyle.underline,
-        strike: editStyle.strike,
-        caseSensitive: overlay.querySelector('#editKwCaseSensitive').classList.contains('active'),
-        acrossElements: overlay.querySelector('#editKwAcrossElements').classList.contains('active'),
-        showRail: overlay.querySelector('#editKwShowRail').checked,
-        exclusive: overlay.querySelector('#editKwExclusive').checked
+        matchType: st.matchType,
+        color: st.style.bgColor,
+        textColor: st.style.textColor,
+        fontSize: st.style.fontSize,
+        bold: st.style.bold,
+        italic: st.style.italic,
+        underline: st.style.underline,
+        strike: st.style.strike,
+        caseSensitive: st.caseSensitive,
+        acrossElements: st.acrossElements,
+        showRail: st.showRail,
+        exclusive: st.exclusive
       });
       overlay.remove();
       if (onSaveDone) onSaveDone();

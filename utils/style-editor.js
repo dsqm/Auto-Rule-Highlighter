@@ -253,7 +253,156 @@ var StyleEditor = (function () {
     return { read: read, set: set };
   }
 
+  /**
+   * 「关键词样式选项栏」共享组件 —— popup 搜索区 / 管理关键词弹窗 / 编辑关键词样式弹窗 三处共用。
+   *
+   * 统一布局（与 popup 搜索区一致）：
+   *   行1（match-type-row）：  [包含][精确][正则][通配] │ [Aa][↔] [右边栏][独占高亮]
+   *   行2（toggle-options-row）：[当前样式方块] │ [预设圆 ○ ○ ○]
+   *
+   * 之后要调整这套 UI 的样式 / 结构，只改本函数即可同步三处。
+   *
+   * opts：
+   *   presets       预设样式数组（全局 stylePresets）
+   *   currentStyle  初始当前样式（overrides 形式：bgColor/textColor/fontSize/bold…）
+   *   settings      当前设置（用于 resolveStyle 还原完整样式渲染预览）
+   *   matchType / caseSensitive / acrossElements / showRail / exclusive  初始值
+   *   showExtra     是否显示「右边栏 / 独占高亮」开关（管理/编辑弹窗用），默认 false
+   *   onStateChange 任一控件变化时回调 (state) => void
+   *   onEditStyle   点击当前样式方块时回调 () => void
+   *
+   * 返回：
+   *   getState() => { matchType, caseSensitive, acrossElements, showRail, exclusive, style }
+   *   setState(patch)  外部同步状态（如样式编辑弹窗保存后更新 style）
+   */
+  function mountStyleBar(container, opts) {
+    if (!container) return { getState: function () { return {}; }, setState: function () {} };
+    opts = opts || {};
+    var settings = opts.settings || {};
+    var presets = opts.presets || [];
+    var state = {
+      matchType: opts.matchType || 'contains',
+      caseSensitive: opts.caseSensitive === true,
+      acrossElements: opts.acrossElements === true,
+      showRail: opts.showRail !== false,
+      exclusive: opts.exclusive === true,
+      style: opts.currentStyle || {}
+    };
+    var TYPES = [['contains', '包含'], ['exact', '精确'], ['regex', '正则'], ['wildcard', '通配']];
+    var previewEl = null;
+    var presetsEl = null;
+
+    function getState() {
+      return {
+        matchType: state.matchType,
+        caseSensitive: state.caseSensitive,
+        acrossElements: state.acrossElements,
+        showRail: state.showRail,
+        exclusive: state.exclusive,
+        style: state.style
+      };
+    }
+
+    function emit() {
+      if (opts.onStateChange) opts.onStateChange(getState());
+    }
+
+    function renderPreview() {
+      if (previewEl) StyleKit.renderPreview(previewEl, StyleKit.resolveStyle(state.style, settings), 28, 28);
+    }
+
+    function renderPresets() {
+      if (!presetsEl) return;
+      presetsEl.innerHTML = '';
+      presets.forEach(function (p, i) {
+        var dot = document.createElement('span');
+        dot.className = 'preset-dot' + (StyleKit.styleEquals(p, state.style) ? ' selected' : '');
+        StyleKit.renderPresetDot(dot, p, 28);
+        dot.title = '套用此样式';
+        dot.setAttribute('data-preset-idx', i);
+        presetsEl.appendChild(dot);
+      });
+      renderPreview();
+    }
+
+    function render() {
+      var extra = '';
+      if (opts.showExtra) {
+        extra =
+          '<label style="font-size:11px;display:inline-flex;align-items:center;gap:2px;white-space:nowrap;margin-left:4px;" title="显示右边栏标记"><input type="checkbox" data-role="rail"' + (state.showRail ? ' checked' : '') + ' style="margin:0;">右边栏</label>' +
+          '<label style="font-size:11px;display:inline-flex;align-items:center;gap:2px;white-space:nowrap;margin-left:4px;" title="匹配后独占高亮（出现后隐藏其他关键词的高亮）"><input type="checkbox" data-role="exclusive"' + (state.exclusive ? ' checked' : '') + ' style="margin:0;">⭐独占</label>';
+      }
+      container.innerHTML =
+        '<div class="match-type-row">' +
+          TYPES.map(function (t) {
+            return '<button class="match-type-btn' + (state.matchType === t[0] ? ' active' : '') + '" data-match-type="' + t[0] + '" type="button">' + t[1] + '</button>';
+          }).join('') +
+          '<span class="v-sep"></span>' +
+          '<button class="toggle-opt-btn' + (state.caseSensitive ? ' active' : '') + '" data-role="case" title="区分大小写" type="button">Aa</button>' +
+          '<button class="toggle-opt-btn across' + (state.acrossElements ? ' active' : '') + '" data-role="across" title="跨元素匹配" type="button">↔</button>' +
+          extra +
+        '</div>' +
+        '<div class="toggle-options-row">' +
+          '<span class="kw-style-preview" title="当前样式，点击编辑" style="cursor:pointer;"></span>' +
+          '<span class="v-sep"></span>' +
+          '<div class="kw-presets-row" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;"></div>' +
+        '</div>';
+      previewEl = container.querySelector('.kw-style-preview');
+      presetsEl = container.querySelector('.kw-presets-row');
+      renderPresets();
+    }
+
+    // 事件委托：只绑一次，render 重建内容后依然有效
+    container.addEventListener('click', function (e) {
+      var mt = e.target.closest('.match-type-btn');
+      if (mt) { state.matchType = mt.dataset.matchType; emit(); render(); return; }
+      var role = e.target.closest('[data-role]');
+      if (role) {
+        var r = role.dataset.role;
+        if (r === 'case') state.caseSensitive = !state.caseSensitive;
+        else if (r === 'across') state.acrossElements = !state.acrossElements;
+        emit();
+        render();
+        return;
+      }
+      var dot = e.target.closest('.preset-dot');
+      if (dot) {
+        var idx = dot.getAttribute('data-preset-idx');
+        if (idx !== null && presets[idx]) {
+          state.style = StyleKit.keywordOverrides(presets[idx]);
+          emit();
+          render();
+        }
+        return;
+      }
+      if (e.target.closest('.kw-style-preview')) {
+        if (opts.onEditStyle) opts.onEditStyle();
+      }
+    });
+    container.addEventListener('change', function (e) {
+      var rail = e.target.closest('input[data-role="rail"]');
+      if (rail) { state.showRail = rail.checked; emit(); return; }
+      var exc = e.target.closest('input[data-role="exclusive"]');
+      if (exc) { state.exclusive = exc.checked; emit(); }
+    });
+
+    render();
+
+    return {
+      getState: getState,
+      setState: function (patch) {
+        if (patch && typeof patch === 'object') {
+          for (var k in patch) {
+            if (patch.hasOwnProperty(k)) state[k] = patch[k];
+          }
+          render();
+        }
+      }
+    };
+  }
+
   return {
-    mountStyleEditor: mountStyleEditor
+    mountStyleEditor: mountStyleEditor,
+    mountStyleBar: mountStyleBar
   };
 })();

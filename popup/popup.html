@@ -35,7 +35,7 @@
     .match-type-btn { font-size: 11px; padding: 3px 8px; border: 1px solid #d9d9d9; border-radius: 3px; background: #fafafa; color: #666; cursor: pointer; transition: all 0.15s; }
     .match-type-btn:hover { border-color: #1890ff; color: #1890ff; }
     .match-type-btn.active { background: #1890ff; color: #fff; border-color: #1890ff; }
-    .toggle-options-row { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+    .toggle-options-row { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
     .v-sep { width: 2px; height: 18px; background: #d0d0d0; flex-shrink: 0; align-self: center; margin: 0 4px; border-radius: 1px; }
     .toggle-opt-btn { font-size: 10px; padding: 3px 7px; border: 1px solid #e0e0e0; border-radius: 3px; background: #fafafa; color: #bbb; cursor: pointer; font-weight: 600; transition: all 0.15s; line-height: 1.4; }
     .toggle-opt-btn:hover { border-color: #1890ff; }
@@ -137,23 +137,8 @@
       <button class="btn btn-primary" id="btnSearch">+</button>
     </div>
 
-    <div class="search-options">
-      <div class="match-type-row">
-        <button class="match-type-btn active" data-match-type="contains">包含</button>
-        <button class="match-type-btn" data-match-type="exact">精确</button>
-        <button class="match-type-btn" data-match-type="regex">正则</button>
-        <button class="match-type-btn" data-match-type="wildcard">通配</button>
-        <span class="v-sep"></span>
-        <button class="toggle-opt-btn" id="searchCaseSensitive" title="区分大小写">Aa</button>
-        <button class="toggle-opt-btn across" id="searchAcrossElements" title="跨元素匹配">↔</button>
-      </div>
-      <div class="toggle-options-row">
-        <!-- popup 搜索区：当前临时样式方块 与 预设圆 之间的分隔线（.v-sep） -->
-        <span id="searchStylePreview" title="当前临时高亮样式，点击编辑"></span>
-        <span class="v-sep"></span>
-        <div class="color-preset-row" id="searchColorPresets"></div>
-      </div>
-    </div>
+    <!-- popup 搜索区：匹配类型 + Aa/↔ + 当前样式方块 + 预设圆，由共享组件 StyleKit.mountStyleBar 渲染 -->
+    <div class="search-options" id="searchOptionsBar"></div>
   </div>
 
   <div class="popup-scroll">

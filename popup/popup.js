@@ -13,7 +13,6 @@ document.addEventListener('DOMContentLoaded', function () {
   var btnManageRules = document.getElementById('btnManageRules');
   var btnHistory = document.getElementById('btnHistory');
   var historyDropdown = document.getElementById('historyDropdown');
-  var searchColorPresets = document.getElementById('searchColorPresets');
   var spotSection = document.getElementById('spotSection');
   var spotList = document.getElementById('spotList');
   var spotCountEl = document.getElementById('spotCount');
@@ -49,6 +48,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var cppCancel = null;
   var cppApply = null;
   var cppOpenSnapshot = '';
+  var styleBar = null;
 
   cppPopup = document.getElementById('colorPickerPopup');
   cppStyleBody = document.getElementById('cppStyleBody');
@@ -119,87 +119,12 @@ document.addEventListener('DOMContentLoaded', function () {
     return 'tmp_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
   }
 
-  function setActiveMatchType(type) {
-    selectedMatchType = type;
-    var btns = document.querySelectorAll('.match-type-btn');
-    for (var b = 0; b < btns.length; b++) {
-      btns[b].classList.toggle('active', btns[b].dataset.matchType === type);
-    }
-  }
-
-  /** 当前临时样式预览：自定义后一眼可见「正在用自定义样式」 */
-  function renderSearchPreview() {
-    if (searchStylePreview) {
-      StyleKit.renderPreview(searchStylePreview, StyleKit.resolveStyle(selectedTempStyle, currentSettings), 28, 28);
-    }
-  }
-
-  function renderSearchColorPresets() {
-    searchColorPresets.innerHTML = '';
-    for (var i = 0; i < stylePresets.length; i++) {
-      var p = stylePresets[i];
-      var block = document.createElement('span');
-      block.className = 'preset-dot' + (StyleKit.styleEquals(p, selectedTempStyle) ? ' selected' : '');
-      StyleKit.renderPresetDot(block, p, 28);
-      block.title = '套用此样式';
-      block.addEventListener('click', (function (preset) {
-        return function () {
-          selectedTempStyle = StyleKit.keywordOverrides(preset);
-          persistTempStyle();
-          renderSearchColorPresets();
-          renderSearchPreview();
-        };
-      })(p));
-      searchColorPresets.appendChild(block);
-    }
-    renderSearchPreview();
-  }
-
-  // 点当前样式预览 = 打开自定义弹窗
-  var searchStylePreview = document.getElementById('searchStylePreview');
-  if (searchStylePreview) {
-    searchStylePreview.style.cursor = 'pointer';
-    searchStylePreview.addEventListener('click', function () {
-      cppTarget = { isTempStyle: true };
-      openStylePanel(selectedTempStyle, searchStylePreview);
-    });
-  }
-
   /** 把当前临时高亮默认样式持久化（只存有显式值的字段，undefined 字段不落盘），下次打开弹窗仍是它 */
   function persistTempStyle() {
     Storage.getSettings().then(function (s) {
       s.tempStyle = StyleKit.keywordOverrides(selectedTempStyle);
       return Storage.saveSettings(s);
     }).catch(function () {});
-  }
-
-  var scsBtn = document.getElementById('searchCaseSensitive');
-  var saeBtn = document.getElementById('searchAcrossElements');
-
-  function updateToggleBtns() {
-    scsBtn.classList.toggle('active', caseSensitive);
-    scsBtn.title = caseSensitive ? '区分大小写：开' : '区分大小写：关';
-    saeBtn.classList.toggle('active', acrossElements);
-    saeBtn.title = acrossElements ? '跨元素匹配：开' : '跨元素匹配：关';
-  }
-
-  scsBtn.addEventListener('click', function () {
-    caseSensitive = !caseSensitive;
-    updateToggleBtns();
-  });
-
-  saeBtn.addEventListener('click', function () {
-    acrossElements = !acrossElements;
-    updateToggleBtns();
-  });
-
-  updateToggleBtns();
-
-  var matchTypeBtns = document.querySelectorAll('.match-type-btn');
-  for (var mt = 0; mt < matchTypeBtns.length; mt++) {
-    matchTypeBtns[mt].addEventListener('click', function () {
-      setActiveMatchType(this.dataset.matchType);
-    });
   }
 
   Storage.getSettings().then(function (settings) {
@@ -211,20 +136,31 @@ document.addEventListener('DOMContentLoaded', function () {
     selectedTempStyle = settings.tempStyle
       ? StyleKit.keywordOverrides(settings.tempStyle)
       : StyleKit.keywordOverrides(stylePresets[0] || StyleKit.getDefaultStyle(settings));
-    renderSearchColorPresets();
     historyEnabled = settings.historyEnabled !== false;
     tempHistory = Array.isArray(settings.tempHistory) ? settings.tempHistory.slice() : [];
-    if (settings.defaultMatchType) {
-      setActiveMatchType(settings.defaultMatchType);
-    }
-    if (settings.defaultCaseSensitive) {
-      caseSensitive = true;
-      updateToggleBtns();
-    }
-    if (settings.defaultAcrossElements) {
-      acrossElements = true;
-      updateToggleBtns();
-    }
+    if (settings.defaultMatchType) selectedMatchType = settings.defaultMatchType;
+    if (settings.defaultCaseSensitive) caseSensitive = true;
+    if (settings.defaultAcrossElements) acrossElements = true;
+    // 共享样式选项栏：popup 搜索区 / 管理关键词弹窗 / 编辑关键词样式弹窗 三处复用同一组件（mountStyleBar）
+    styleBar = StyleEditor.mountStyleBar(document.getElementById('searchOptionsBar'), {
+      presets: stylePresets,
+      currentStyle: selectedTempStyle,
+      settings: currentSettings,
+      matchType: selectedMatchType,
+      caseSensitive: caseSensitive,
+      acrossElements: acrossElements,
+      onStateChange: function (s) {
+        selectedMatchType = s.matchType;
+        caseSensitive = s.caseSensitive;
+        acrossElements = s.acrossElements;
+        selectedTempStyle = s.style;
+        persistTempStyle();
+      },
+      onEditStyle: function () {
+        cppTarget = { isTempStyle: true };
+        openStylePanel(selectedTempStyle, null);
+      }
+    });
   });
 
   chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
@@ -510,7 +446,7 @@ document.addEventListener('DOMContentLoaded', function () {
       selectedTempStyle = StyleKit.keywordOverrides(overrides);
       persistTempStyle();
       closeColorPicker();
-      renderSearchColorPresets();
+      if (styleBar) styleBar.setState({ style: selectedTempStyle });
       return;
     }
     if (cppTarget.isSpot) {
@@ -690,14 +626,13 @@ document.addEventListener('DOMContentLoaded', function () {
     if (historyIndex < 0 || historyIndex >= tempHistory.length) return;
     var h = tempHistory[historyIndex];
     searchInput.value = h.text;
-    setActiveMatchType(h.matchType);
+    selectedMatchType = h.matchType;
     caseSensitive = h.caseSensitive;
     acrossElements = h.acrossElements || false;
-    updateToggleBtns();
     // 新格式存 style 对象；旧记录只有 color，转成「仅背景色」样式
     selectedTempStyle = StyleKit.keywordOverrides(h.style || { bgColor: h.color || '' });
     persistTempStyle();
-    renderSearchColorPresets();
+    if (styleBar) styleBar.setState({ matchType: selectedMatchType, caseSensitive: caseSensitive, acrossElements: acrossElements, style: selectedTempStyle });
   }
 
   btnHistory.addEventListener('click', function (e) {
@@ -796,7 +731,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (historyOpen && !historyDropdown.contains(e.target) && e.target !== btnHistory && !(cppPopup && cppPopup.contains(e.target))) {
       closeHistoryDropdown();
     }
-    if (cppPopup && cppPopup.classList.contains('show') && !cppPopup.contains(e.target) && !e.target.closest('.kw-preview') && !e.target.closest('#searchStylePreview')) {
+    if (cppPopup && cppPopup.classList.contains('show') && !cppPopup.contains(e.target) && !e.target.closest('.kw-preview') && !e.target.closest('.kw-style-preview')) {
       // 原生颜色拾色器弹出时会盖住面板底部的「应用」按钮，用户常误点面板外想关掉拾色器；
       // 有未保存改动时不关闭面板，闪红边提示，必须显式点「应用 / 取消」，避免颜色直接丢失
       var dirty = false;
