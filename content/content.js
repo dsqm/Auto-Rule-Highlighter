@@ -192,7 +192,7 @@
       var selText = msg.text;
       if (!selText) return;
       var rndColor = getRandomDistinctColor();
-      var kw = { id: 'tmp_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5), text: selText, matchType: 'contains', caseSensitive: false, acrossElements: false, color: rndColor };
+      var kw = { id: CommonKit.uid('tmp_', 5), text: selText, matchType: 'contains', caseSensitive: false, acrossElements: false, color: rndColor };
       tempKeywords.push(kw);
       reHighlight();
       var settingsResp = {};
@@ -203,7 +203,7 @@
       var spotSelText = msg.text;
       if (!spotSelText) return;
       var spotStyle = getNextSpotStyle();
-      var spotId = 's_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+      var spotId = CommonKit.uid('s_', 5);
       // 所有片段在创建时已统一带上 spotId，无需兄弟反查
       highlightSelectedRange(spotSelText, spotStyle, spotId);
       try {
@@ -218,7 +218,7 @@
       var selText = window.getSelection().toString();
       if (!selText) return;
       var rndColor = getRandomDistinctColor();
-      var kw = { id: 'tmp_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5), text: selText, matchType: 'contains', caseSensitive: false, acrossElements: false, color: rndColor };
+      var kw = { id: CommonKit.uid('tmp_', 5), text: selText, matchType: 'contains', caseSensitive: false, acrossElements: false, color: rndColor };
       tempKeywords.push(kw);
       reHighlight();
       try {
@@ -229,7 +229,7 @@
       var spotSelText = window.getSelection().toString();
       if (!spotSelText) return;
       var spotStyle = getNextSpotStyle();
-      var spotId = 's_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+      var spotId = CommonKit.uid('s_', 5);
       // 所有片段在创建时已统一带上 spotId，无需兄弟反查
       highlightSelectedRange(spotSelText, spotStyle, spotId);
       try {

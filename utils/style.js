@@ -1,5 +1,5 @@
 // 高亮样式的单一数据源：content（渲染）/ options（配置）/ popup（快速编辑）三端共用
-// 依赖：无。需在 manifest 的 content_scripts、options.html、popup.html 中分别引入
+// 依赖：CommonKit（utils/common.js，需先引入）
 var StyleKit = (function () {
   'use strict';
 
@@ -30,8 +30,9 @@ var StyleKit = (function () {
   var MIN_FONT_SIZE = 0.5;
   var MAX_FONT_SIZE = 3;
 
+  // 唯一 id：统一实现见 CommonKit.uid（style.js 历史用途为无前缀 9 位随机段）
   function uid() {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+    return CommonKit.uid();
   }
 
   function blankStyle() {

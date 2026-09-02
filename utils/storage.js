@@ -197,7 +197,7 @@ var Storage = {
   },
 
   _uuid() {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+    return CommonKit.uid();
   },
 
   SPOT_KEY: 'ah_spot_highlights',

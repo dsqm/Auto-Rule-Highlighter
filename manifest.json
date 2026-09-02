@@ -13,7 +13,7 @@
       "matches": ["<all_urls>"],
       "all_frames": true,
       "match_origin_as_fallback": true,
-      "js": ["utils/matcher.js", "utils/storage.js", "utils/style.js", "content/content.js"],
+      "js": ["utils/common.js", "utils/matcher.js", "utils/storage.js", "utils/style.js", "content/content.js"],
       "css": ["content/content.css"],
       "run_at": "document_idle"
     }

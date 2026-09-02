@@ -1,7 +1,7 @@
 /**
  * StyleEditor — 带开关的样式编辑器（背景 / 文字 / 字号 / 字形）
  *
- * 依赖：StyleKit（utils/style.js，需先引入）
+ * 依赖：CommonKit（utils/common.js）+ StyleKit（utils/style.js，需先引入）
  * 供 options 与 popup 共用，渲染到调用方提供的容器内。
  *
  * 语义：
@@ -288,7 +288,7 @@ var StyleEditor = (function () {
       exclusive: opts.exclusive === true,
       style: opts.currentStyle || {}
     };
-    var TYPES = [['contains', '包含'], ['exact', '精确'], ['regex', '正则'], ['wildcard', '通配']];
+    var TYPES = CommonKit.MATCH_TYPES;
     var previewEl = null;
     var presetsEl = null;
 

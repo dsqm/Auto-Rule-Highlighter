@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   /** 模板串里只能放占位符，插入 DOM 后再用 StyleKit 渲染，保证三端预览规则一致 */
   function previewPlaceholder(style, action, idAttr, extraAttrs) {
-    var json = escapeHtml(JSON.stringify(StyleKit.makeStyle(style)));
+    var json = CommonKit.escapeHtml(JSON.stringify(StyleKit.makeStyle(style)));
     return '<span class="kw-preview" data-style="' + json + '"' +
       (action ? ' data-action="' + action + '"' : '') +
       (idAttr ? ' ' + idAttr : '') +
@@ -73,16 +73,6 @@ document.addEventListener('DOMContentLoaded', function () {
       try { parsed = JSON.parse(el.dataset.style); } catch (e) { parsed = null; }
       if (parsed) StyleKit.renderPreview(el, StyleKit.makeStyle(parsed), 28, 20);
     }
-  }
-
-  function escapeHtml(str) {
-    if (!str) return '';
-    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  }
-
-  function getMatchTypeLabel(type) {
-    var labels = { contains: '包含', exact: '精确', regex: '正则', wildcard: '通配' };
-    return labels[type] || '包含';
   }
 
   function findRuleKeyword(kwId) {
@@ -113,10 +103,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
       }
     }
-  }
-
-  function uid() {
-    return 'tmp_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
   }
 
   /** 把当前临时高亮默认样式持久化（只存有显式值的字段，undefined 字段不落盘），下次打开弹窗仍是它 */
@@ -261,7 +247,7 @@ document.addEventListener('DOMContentLoaded', function () {
       return '<div class="kw-item" data-kw-id="' + kw.id + '">' +
         previewPlaceholder(StyleKit.resolveStyle(kw, currentSettings), 'change-color', 'data-kw-id="' + kw.id + '" data-is-temp="1"') +
         exclusiveIcon +
-        '<span class="kw-text' + (isManuallyHidden ? ' dim' : '') + '" title="' + escapeHtml(kw.text) + '">' + escapeHtml(kw.name || kw.text) + '</span>' +
+        '<span class="kw-text' + (isManuallyHidden ? ' dim' : '') + '" title="' + CommonKit.escapeHtml(kw.text) + '">' + CommonKit.escapeHtml(kw.name || kw.text) + '</span>' +
         '<select class="kw-match-type-select" data-action="change-match-type" data-kw-id="' + kw.id + '" data-is-temp="1">' +
           '<option value="contains"' + (kwMt === 'contains' ? ' selected' : '') + '>包含</option>' +
           '<option value="exact"' + (kwMt === 'exact' ? ' selected' : '') + '>精确</option>' +
@@ -304,7 +290,7 @@ document.addEventListener('DOMContentLoaded', function () {
     spotList.innerHTML = spotKeywords.map(function (spot) {
       return '<div class="kw-item" data-spot-id="' + spot.id + '">' +
         previewPlaceholder(StyleKit.resolveStyle(spot, currentSettings), 'change-spot-color', 'data-spot-id="' + spot.id + '"') +
-        '<span class="kw-text" title="' + escapeHtml(spot.text) + '">' + escapeHtml(spot.text) + '</span>' +
+        '<span class="kw-text" title="' + CommonKit.escapeHtml(spot.text) + '">' + CommonKit.escapeHtml(spot.text) + '</span>' +
         '<span class="kw-type">高亮此处</span>' +
         '<div class="kw-actions">' +
           '<button class="btn btn-sm" data-action="nav-spot" data-spot-id="' + spot.id + '" title="定位到此处">📍</button>' +
@@ -378,11 +364,11 @@ document.addEventListener('DOMContentLoaded', function () {
       }
 
       return '<div class="kw-item ' + statusClass + '" data-kw-id="' + kw.id + '" data-rule-id="' + kw.ruleId + '">' +
-        '<span class="kw-rule-name" title="' + escapeHtml(kw.ruleName) + '">' + escapeHtml(kw.ruleName) + '</span>' +
+        '<span class="kw-rule-name" title="' + CommonKit.escapeHtml(kw.ruleName) + '">' + CommonKit.escapeHtml(kw.ruleName) + '</span>' +
         previewPlaceholder(StyleKit.resolveStyle(kw, currentSettings), '', '') +
         exclusiveIcon +
-        '<span class="kw-text' + (isEffectivelyHidden ? ' dim' : '') + '" title="' + escapeHtml(kw.text) + '">' + escapeHtml(kw.name || kw.text) + '</span>' +
-        '<span class="kw-type">' + getMatchTypeLabel(kw.matchType) + '</span>' +
+        '<span class="kw-text' + (isEffectivelyHidden ? ' dim' : '') + '" title="' + CommonKit.escapeHtml(kw.text) + '">' + CommonKit.escapeHtml(kw.name || kw.text) + '</span>' +
+        '<span class="kw-type">' + CommonKit.getMatchTypeLabel(kw.matchType) + '</span>' +
         '<div class="kw-actions">' +
           '<span class="kw-nav-index" data-kw-id="' + kw.id + '">' + (kw.count === 0 ? '0' : ((navIndexMap[kw.id] || 0) + 1)) + '/' + kw.count + '</span>' +
           '<button class="kw-nav-btn" data-action="nav-prev" data-kw-id="' + kw.id + '" title="上一个"' + (kw.count === 0 ? ' disabled' : '') + '>▲</button>' +
@@ -496,8 +482,8 @@ document.addEventListener('DOMContentLoaded', function () {
     overlay.innerHTML =
       '<div class="modal">' +
         '<h3>永久保存关键词到规则</h3>' +
-        '<div class="modal-tip">请输入匹配的网址（当前网站：' + escapeHtml(currentTabHost) + '）</div>' +
-        '<input type="text" id="saveUrlInput" value="' + escapeHtml(currentTabHost) + '">' +
+        '<div class="modal-tip">请输入匹配的网址（当前网站：' + CommonKit.escapeHtml(currentTabHost) + '）</div>' +
+        '<input type="text" id="saveUrlInput" value="' + CommonKit.escapeHtml(currentTabHost) + '">' +
         '<div class="modal-actions">' +
           '<button class="btn" id="saveUrlCancel">取消</button>' +
           '<button class="btn btn-primary" id="saveUrlOk">保存</button>' +
@@ -571,7 +557,7 @@ document.addEventListener('DOMContentLoaded', function () {
   function addTempKeyword() {
     var text = searchInput.value.trim();
     if (!text) return;
-    var kw = { id: uid(), text: text, matchType: selectedMatchType, caseSensitive: caseSensitive, acrossElements: acrossElements };
+    var kw = { id: CommonKit.uid('tmp_', 5), text: text, matchType: selectedMatchType, caseSensitive: caseSensitive, acrossElements: acrossElements };
     // 把当前选中样式写入关键词字段（不含继承语义：临时关键词用完即弃）
     StyleKit.applyStyleToKeyword(kw, selectedTempStyle || {});
     tempKeywords.push(kw);
@@ -667,8 +653,8 @@ document.addEventListener('DOMContentLoaded', function () {
       if (h.caseSensitive) tags += '<span class="hist-tag hist-case">Aa</span>';
       if (h.acrossElements) tags += '<span class="hist-tag hist-across">↔</span>';
       return '<div class="history-item' + (i === historyIndex ? ' active' : '') + '" data-history-idx="' + i + '">' +
-        '<span class="hist-text">' + escapeHtml(h.text) + '</span>' +
-        '<span class="hist-match">' + getMatchTypeLabel(h.matchType) + '</span>' +
+        '<span class="hist-text">' + CommonKit.escapeHtml(h.text) + '</span>' +
+        '<span class="hist-match">' + CommonKit.getMatchTypeLabel(h.matchType) + '</span>' +
         tags +
         '<span class="hist-del" data-hist-del="' + i + '" title="删除">✕</span>' +
       '</div>';

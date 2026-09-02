@@ -333,11 +333,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderRules(rules);
   }
 
-  function escapeHtml(str) {
-    if (!str) return '';
-    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  }
-
   /** 关键词行的预览块在模板串里只是占位符（带 data-style），插入 DOM 后统一渲染 */
   function hydrateKwPreviews(container) {
     var els = container.querySelectorAll('.kw-preview[data-style]');
@@ -347,11 +342,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       try { parsed = JSON.parse(el.dataset.style); } catch (e) { parsed = null; }
       if (parsed) StyleKit.renderPreview(el, StyleKit.makeStyle(parsed), 26, 18);
     }
-  }
-
-  function getMatchTypeLabel(type) {
-    const labels = { contains: '包含', exact: '精确', regex: '正则', wildcard: '通配' };
-    return labels[type] || '包含';
   }
 
   function renderRules(rules) {
@@ -371,9 +361,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             <input type="checkbox" ${rule.enabled ? 'checked' : ''} data-action="toggle-rule" data-rule-id="${rule.id}">
             <span class="slider"></span>
           </label>
-          <span class="rule-url" title="${escapeHtml(rule.urlPattern)}">${escapeHtml(rule.name || rule.urlPattern)}</span>
-          ${rule.name ? '<span style="font-size:10px;color:#bbb;">(' + escapeHtml(rule.urlPattern) + ')</span>' : ''}
-          <span class="rule-match-type">${getMatchTypeLabel(rule.urlMatchType)}</span>
+          <span class="rule-url" title="${CommonKit.escapeHtml(rule.urlPattern)}">${CommonKit.escapeHtml(rule.name || rule.urlPattern)}</span>
+          ${rule.name ? '<span style="font-size:10px;color:#bbb;">(' + CommonKit.escapeHtml(rule.urlPattern) + ')</span>' : ''}
+          <span class="rule-match-type">${CommonKit.getMatchTypeLabel(rule.urlMatchType)}</span>
           <span style="font-size:11px;color:#999;">${kwCount} 个关键词</span>
           <div class="rule-actions">
             <button class="btn btn-sm" data-action="manage-keywords" data-rule-id="${rule.id}">管理关键词</button>
@@ -460,11 +450,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         <h3>${title}</h3>
         <div class="form-group">
           <label>规则名称（可选）</label>
-          <input type="text" id="modalRuleName" value="${escapeHtml(data.name)}" placeholder="例如: GitHub">
+          <input type="text" id="modalRuleName" value="${CommonKit.escapeHtml(data.name)}" placeholder="例如: GitHub">
         </div>
         <div class="form-group">
           <label>URL 匹配规则</label>
-          <input type="text" id="modalUrlPattern" value="${escapeHtml(data.urlPattern)}" placeholder="例如: github.com">
+          <input type="text" id="modalUrlPattern" value="${CommonKit.escapeHtml(data.urlPattern)}" placeholder="例如: github.com">
         </div>
         <div class="form-group">
           <label>匹配方式</label>
@@ -507,7 +497,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     overlay.innerHTML = `
       <div class="modal" style="width:640px;">
-        <h3>管理关键词 — ${escapeHtml(displayName)}</h3>
+        <h3>管理关键词 — ${CommonKit.escapeHtml(displayName)}</h3>
         <div class="form-group">
           <label>新增关键词</label>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
@@ -561,9 +551,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             <span class="drag-handle" data-drag="kw" title="拖动排序" draggable="true">☰</span>
             <button class="kw-move-btn" data-kw-move-up="${idx}" ${idx === 0 ? 'disabled' : ''} title="上移">▲</button>
             <button class="kw-move-btn" data-kw-move-down="${idx}" ${idx === keywords.length - 1 ? 'disabled' : ''} title="下移">▼</button>
-            <span class="kw-preview" data-style="${escapeHtml(JSON.stringify(StyleKit.resolveStyle(kw, currentSettings)))}"></span>
-            <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(kw.text)}">${escapeHtml(kw.name || kw.text)}</span>
-            <span style="font-size:10px;color:#999;background:#f5f5f5;padding:1px 5px;border-radius:3px;">${getMatchTypeLabel(kw.matchType)}</span>
+            <span class="kw-preview" data-style="${CommonKit.escapeHtml(JSON.stringify(StyleKit.resolveStyle(kw, currentSettings)))}"></span>
+            <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${CommonKit.escapeHtml(kw.text)}">${CommonKit.escapeHtml(kw.name || kw.text)}</span>
+            <span style="font-size:10px;color:#999;background:#f5f5f5;padding:1px 5px;border-radius:3px;">${CommonKit.getMatchTypeLabel(kw.matchType)}</span>
             ${kw.caseSensitive ? '<span style="font-size:10px;color:#fa8c16;font-weight:600;">Aa</span>' : ''}
             ${kw.acrossElements ? '<span style="font-size:10px;color:#1890ff;font-weight:600;">↔</span>' : ''}
             ${kw.showRail !== false ? '<span style="font-size:10px;color:#52c41a;">📍</span>' : ''}
@@ -692,11 +682,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         <h3>编辑关键词</h3>
         <div class="form-group">
           <label>名称（可选，显示在图标菜单中）</label>
-          <input type="text" id="editKwName" value="${escapeHtml(kw.name || '')}" placeholder="留空则显示关键词原文" style="width:100%;padding:6px 10px;border:1px solid #d9d9d9;border-radius:4px;font-size:13px;outline:none;">
+          <input type="text" id="editKwName" value="${CommonKit.escapeHtml(kw.name || '')}" placeholder="留空则显示关键词原文" style="width:100%;padding:6px 10px;border:1px solid #d9d9d9;border-radius:4px;font-size:13px;outline:none;">
         </div>
         <div class="form-group">
           <label>关键词</label>
-          <input type="text" id="editKwText" value="${escapeHtml(kw.text)}" placeholder="输入关键词" style="width:100%;padding:6px 10px;border:1px solid #d9d9d9;border-radius:4px;font-size:13px;outline:none;">
+          <input type="text" id="editKwText" value="${CommonKit.escapeHtml(kw.text)}" placeholder="输入关键词" style="width:100%;padding:6px 10px;border:1px solid #d9d9d9;border-radius:4px;font-size:13px;outline:none;">
         </div>
         <div class="form-group">
           <label>匹配方式与样式</label>
@@ -868,9 +858,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             <span class="drag-handle" data-drag="kw" title="拖动排序" draggable="true">☰</span>
             <button class="kw-move-btn" data-kw-move-up="${idx}" ${idx === 0 ? 'disabled' : ''} title="上移">▲</button>
             <button class="kw-move-btn" data-kw-move-down="${idx}" ${idx === keywords.length - 1 ? 'disabled' : ''} title="下移">▼</button>
-            <span class="kw-preview" data-style="${escapeHtml(JSON.stringify(StyleKit.resolveStyle(kw, currentSettings)))}"></span>
-            <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(kw.text)}">${escapeHtml(kw.name || kw.text)}</span>
-            <span style="font-size:10px;color:#999;background:#f5f5f5;padding:1px 5px;border-radius:3px;">${getMatchTypeLabel(kw.matchType)}</span>
+            <span class="kw-preview" data-style="${CommonKit.escapeHtml(JSON.stringify(StyleKit.resolveStyle(kw, currentSettings)))}"></span>
+            <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${CommonKit.escapeHtml(kw.text)}">${CommonKit.escapeHtml(kw.name || kw.text)}</span>
+            <span style="font-size:10px;color:#999;background:#f5f5f5;padding:1px 5px;border-radius:3px;">${CommonKit.getMatchTypeLabel(kw.matchType)}</span>
             ${kw.caseSensitive ? '<span style="font-size:10px;color:#fa8c16;font-weight:600;">Aa</span>' : ''}
             ${kw.acrossElements ? '<span style="font-size:10px;color:#1890ff;font-weight:600;">↔</span>' : ''}
             ${kw.showRail !== false ? '<span style="font-size:10px;color:#52c41a;">📍</span>' : ''}
