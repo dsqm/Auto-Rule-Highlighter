@@ -906,6 +906,12 @@
       if (!sel || sel.rangeCount === 0) return null;
       var range = sel.getRangeAt(0);
       if (range.collapsed) return null;
+      // 选区落在非 HTML 命名空间（SVG / MathML）内时直接放弃：
+      // HTML 包裹元素插进去会破坏渲染，让选中文字直接消失——宁可不高亮
+      var anc = range.commonAncestorContainer;
+      var ancEl = anc.nodeType === 1 ? anc : anc.parentNode;
+      var ancNs = ancEl && ancEl.namespaceURI;
+      if (ancNs && ancNs !== 'http://www.w3.org/1999/xhtml') return null;
       var wrapper = document.createElement('ah-spot');
       // 跟随全局默认的文字样式，背景色仍用传入的随机色以便区分多个 spot
       var spotStyle = StyleKit.getDefaultStyle(currentSettings);
@@ -919,10 +925,18 @@
         { acceptNode: function () { return NodeFilter.FILTER_ACCEPT; } }
       );
       var nodes = [];
+      var skippedNs = false;
       while (treeWalker.nextNode()) {
-        if (range.intersectsNode(treeWalker.currentNode)) nodes.push(treeWalker.currentNode);
+        if (!range.intersectsNode(treeWalker.currentNode)) continue;
+        // 跨 HTML/SVG 的混合选区：只包裹 HTML 命名空间的节点，SVG 部分保持原样
+        var np = treeWalker.currentNode.parentNode;
+        var nns = np && np.namespaceURI;
+        if (nns && nns !== 'http://www.w3.org/1999/xhtml') { skippedNs = true; continue; }
+        nodes.push(treeWalker.currentNode);
       }
       if (nodes.length === 0) {
+        // 选区内只有非 HTML 文本：放弃，绝不能把 SVG 内容搬进 HTML 包裹元素
+        if (skippedNs) return null;
         var fragment = range.extractContents();
         wrapper.appendChild(fragment);
         range.insertNode(wrapper);
@@ -1076,6 +1090,11 @@
           var parent = node.parentNode;
           if (!parent) return NodeFilter.FILTER_REJECT;
           if (parent.tagName === 'AH-MARK') return NodeFilter.FILTER_REJECT;
+          // 非 HTML 命名空间（SVG / MathML）的文本一律跳过：
+          // HTML 的 <ah-mark> 插进去会破坏渲染，让关键词直接消失——宁可不高亮。
+          // （SVG 内 foreignObject 里是 HTML 命名空间，仍会正常处理）
+          var ns = parent.namespaceURI;
+          if (ns && ns !== 'http://www.w3.org/1999/xhtml') return NodeFilter.FILTER_REJECT;
           // 只查直接父级：祖先级 display:none 的检测（每节点×深度的 getComputedStyle）
           // 成本远超收益；漏掉的隐藏区在显示时会直接呈现高亮，行为可接受
           if (isHidden(parent)) return NodeFilter.FILTER_REJECT;
