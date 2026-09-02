@@ -139,7 +139,7 @@ document.addEventListener('DOMContentLoaded', function () {
       var p = stylePresets[i];
       var block = document.createElement('span');
       block.className = 'preset-dot' + (StyleKit.styleEquals(p, selectedTempStyle) ? ' selected' : '');
-      StyleKit.renderPresetDot(block, p, 18);
+      StyleKit.renderPresetDot(block, p, 28);
       block.title = '套用此样式';
       block.addEventListener('click', (function (preset) {
         return function () {
@@ -171,13 +171,6 @@ document.addEventListener('DOMContentLoaded', function () {
       return Storage.saveSettings(s);
     }).catch(function () {});
   }
-
-  // 搜索区「自定义样式」：打开完整样式浮层（背景色/文字色/字号/字形），应用到临时高亮
-  var searchStyleBtn = document.getElementById('searchStyleBtn');
-  searchStyleBtn.addEventListener('click', function () {
-    cppTarget = { isTempStyle: true };
-    openStylePanel(selectedTempStyle, searchStyleBtn);
-  });
 
   var scsBtn = document.getElementById('searchCaseSensitive');
   var saeBtn = document.getElementById('searchAcrossElements');
@@ -497,7 +490,7 @@ document.addEventListener('DOMContentLoaded', function () {
       cppPopup.style.top = useTop + 'px';
     }
     // 与设置页同一套带开关的样式编辑器
-    cppStyleEditor = StyleEditor.mountStyleEditor(cppStyleBody, StyleKit.resolveStyle(style || {}, currentSettings));
+    cppStyleEditor = StyleEditor.mountStyleEditor(cppStyleBody, StyleKit.resolveStyle(style || {}, currentSettings), StyleKit.keywordOverrides(style || {}));
     cppPopup.classList.add('show');
   }
 
@@ -746,7 +739,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (historyOpen && !historyDropdown.contains(e.target) && e.target !== btnHistory && !(cppPopup && cppPopup.contains(e.target))) {
       closeHistoryDropdown();
     }
-    if (cppPopup && cppPopup.classList.contains('show') && !cppPopup.contains(e.target) && !e.target.closest('.kw-preview') && !e.target.closest('#searchStyleBtn') && !e.target.closest('#searchStylePreview')) {
+    if (cppPopup && cppPopup.classList.contains('show') && !cppPopup.contains(e.target) && !e.target.closest('.kw-preview') && !e.target.closest('#searchStylePreview')) {
       closeColorPicker();
     }
   });
@@ -785,10 +778,10 @@ document.addEventListener('DOMContentLoaded', function () {
       var allRules = await Storage.getRules();
       var existingRule = allRules.find(function (r) { return r.urlPattern === urlPattern.trim(); });
       if (existingRule) {
-        await Storage.addKeyword(existingRule.id, { text: kw.text, matchType: kw.matchType, caseSensitive: kw.caseSensitive, acrossElements: kw.acrossElements, color: kw.color, textColor: kw.textColor, fontSize: kw.fontSize, bold: kw.bold, italic: kw.italic, underline: kw.underline });
+        await Storage.addKeyword(existingRule.id, { text: kw.text, matchType: kw.matchType, caseSensitive: kw.caseSensitive, acrossElements: kw.acrossElements, color: kw.color, textColor: kw.textColor, fontSize: kw.fontSize, bold: kw.bold, italic: kw.italic, underline: kw.underline, strike: kw.strike });
       } else {
         var newRule = await Storage.addRule({ urlPattern: urlPattern.trim(), urlMatchType: 'contains' });
-        await Storage.addKeyword(newRule.id, { text: kw.text, matchType: kw.matchType, caseSensitive: kw.caseSensitive, acrossElements: kw.acrossElements, color: kw.color, textColor: kw.textColor, fontSize: kw.fontSize, bold: kw.bold, italic: kw.italic, underline: kw.underline });
+        await Storage.addKeyword(newRule.id, { text: kw.text, matchType: kw.matchType, caseSensitive: kw.caseSensitive, acrossElements: kw.acrossElements, color: kw.color, textColor: kw.textColor, fontSize: kw.fontSize, bold: kw.bold, italic: kw.italic, underline: kw.underline, strike: kw.strike });
       }
       tempKeywords = tempKeywords.filter(function (k) { return k.id !== kwId; });
       hiddenKwIds.delete(kwId);

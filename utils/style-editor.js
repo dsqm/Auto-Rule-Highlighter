@@ -9,22 +9,27 @@
  *   文字开关  开 = 自定义文字色；关 = 不染色（保持页面原色）
  *             勾选开启时若未填色，自动填充基于背景的反色
  *   字号开关  开 = 自定义字号；关 = 默认字号
- *   字形 chips 独立开关
+ *   字形 chips 独立开关（加粗 / 斜体 / 下划线 / 删除线）
  *
  * read() 返回 overrides 对象：
  *   bgColor  ''（透明）或 '#rrggbb'；关 = ''
  *   textColor '#rrggbb'；关 = 不写入（undefined = 保持原色）
  *   fontSize  数值；关 = 不写入
+ *
+ * 第二个参数 initialStyle 是「解析后的有效样式」（决定控件显示的数值），
+ * 第三个参数 overrides 是「显式设置过的字段」（决定各开关的勾选态）。
+ * 不传 overrides 时退化为用 initialStyle 自身判定。
  */
 var StyleEditor = (function () {
   'use strict';
 
-  var FIELDS = ['bgColor', 'textColor', 'fontSize', 'bold', 'italic', 'underline'];
+  var FIELDS = ['bgColor', 'textColor', 'fontSize', 'bold', 'italic', 'underline', 'strike'];
 
-  function mountStyleEditor(container, initialStyle) {
+  function mountStyleEditor(container, initialStyle, overrides) {
     if (!container) return { read: function () { return {}; }, set: function () {} };
 
     var st = initialStyle || {};
+    var ov = overrides || st;
 
     container.innerHTML =
       '<div class="se-row"><span class="se-label">背景</span>' +
@@ -35,7 +40,7 @@ var StyleEditor = (function () {
       '<div class="se-row"><span class="se-label">文字</span>' +
         '<input type="checkbox" class="se-toggle se-text-toggle">' +
         '<input type="color" class="se-text-color" value="#000000">' +
-        '<input type="text" class="se-text-hex" value="" maxlength="7" placeholder="不设=原色">' +
+        '<input type="text" class="se-text-hex" value="" maxlength="7" placeholder="">' +
       '</div>' +
       '<div class="se-row"><span class="se-label">字号</span>' +
         '<input type="checkbox" class="se-toggle se-fs-toggle">' +
@@ -46,6 +51,7 @@ var StyleEditor = (function () {
         '<button type="button" class="se-chip b" title="加粗">B</button>' +
         '<button type="button" class="se-chip i" title="斜体">I</button>' +
         '<button type="button" class="se-chip u" title="下划线">U</button>' +
+        '<button type="button" class="se-chip s" title="删除线">S</button>' +
       '</div>';
 
     var bgToggle = container.querySelector('.se-bg-toggle');
@@ -60,6 +66,7 @@ var StyleEditor = (function () {
     var chipB = container.querySelector('.se-chip.b');
     var chipI = container.querySelector('.se-chip.i');
     var chipU = container.querySelector('.se-chip.u');
+    var chipS = container.querySelector('.se-chip.s');
 
     function sync() {
       bgColor.disabled = !bgToggle.checked;
@@ -75,27 +82,32 @@ var StyleEditor = (function () {
       return StyleKit.contrastColor(v);
     }
 
-    function set(newStyle) {
+    function set(newStyle, newOverrides) {
       st = newStyle || {};
-      // 背景：有非空色值 = 开；空字符串（透明）或无 = 关
-      var bg = st.bgColor || '';
+      ov = newOverrides || st;
+      // 背景：优先按显式设置判定，未显式设置时按解析结果（默认黄底 → 开）
+      var bgVal = (ov.bgColor !== undefined) ? ov.bgColor : st.bgColor;
+      var bg = bgVal || '';
       bgToggle.checked = !!bg;
       bgColor.value = bg || '#ffeb3b';
       bgHex.value = bg;
-      // 文字：自定义色 = 开
-      var tc = (typeof st.textColor === 'string' && st.textColor.charAt(0) === '#') ? st.textColor : '';
+      // 文字：'#' 自定义色 = 开（undefined / null / 'inherit' 均视为不染色）
+      var tcRaw = (ov.textColor !== undefined) ? ov.textColor : st.textColor;
+      var tc = (typeof tcRaw === 'string' && tcRaw.charAt(0) === '#') ? tcRaw : '';
       textToggle.checked = !!tc;
       textColor.value = tc || '#000000';
       textHex.value = tc;
-      // 字号：有显式值 = 开
+      // 字号：仅「显式设置过且 ≠ 1×」才勾选开关（1× 与继承等价，滑块数值始终显示解析结果）
       var fs = st.fontSize;
-      fsToggle.checked = fs !== undefined && fs !== null;
+      var fsO = ov.fontSize;
+      fsToggle.checked = fsO !== undefined && fsO !== null && StyleKit.clampFontSize(fsO) !== 1;
       fsRange.value = String(fs || 1);
       fsVal.textContent = (fs || 1).toFixed(1) + '×';
-      // 字形
+      // 字形（按实际效果显示）
       chipB.classList.toggle('on', st.bold === true);
       chipI.classList.toggle('on', st.italic === true);
       chipU.classList.toggle('on', st.underline === true);
+      chipS.classList.toggle('on', st.strike === true);
       sync();
     }
 
@@ -110,6 +122,7 @@ var StyleEditor = (function () {
       if (chipB.classList.contains('on')) out.bold = true;
       if (chipI.classList.contains('on')) out.italic = true;
       if (chipU.classList.contains('on')) out.underline = true;
+      if (chipS.classList.contains('on')) out.strike = true;
       return out;
     }
 
@@ -151,8 +164,9 @@ var StyleEditor = (function () {
     chipB.addEventListener('click', function () { chipB.classList.toggle('on'); });
     chipI.addEventListener('click', function () { chipI.classList.toggle('on'); });
     chipU.addEventListener('click', function () { chipU.classList.toggle('on'); });
+    chipS.addEventListener('click', function () { chipS.classList.toggle('on'); });
 
-    set(st);
+    set(st, overrides);
     return { read: read, set: set };
   }
 

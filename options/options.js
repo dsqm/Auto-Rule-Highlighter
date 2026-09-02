@@ -131,7 +131,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       block.className = 'style-preset-block' + (i === 0 ? ' is-default' : '');
       block.draggable = true;
       const preview = document.createElement('span');
-      StyleKit.renderPresetDot(preview, p, 30);
+      StyleKit.renderPresetDot(preview, p, 28);
       block.appendChild(preview);
       if (i === 0) {
         const badge = document.createElement('span');
@@ -527,7 +527,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             </select>
             <span id="kwStylePreview" title="当前样式，点击编辑" style="cursor:pointer;"></span>
             <div id="kwPresetsRow" style="display:flex;gap:4px;align-items:center;"></div>
-            <button class="btn btn-sm" id="kwStyleBtn" type="button" title="自定义样式：背景色 / 文字颜色 / 字号 / 字形">自定义样式</button>
             <button class="toggle-opt-btn" id="kwCaseSensitive" title="区分大小写" type="button">Aa</button>
             <button class="toggle-opt-btn across" id="kwAcrossElements" title="跨元素匹配" type="button">↔</button>
             <label style="font-size:11px;display:flex;align-items:center;gap:2px;white-space:nowrap;"><input type="checkbox" id="kwShowRail" checked> 右边栏</label>
@@ -620,7 +619,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       stylePresets.forEach(function (p) {
         var dot = document.createElement('span');
         dot.className = 'kw-preset-dot' + (StyleKit.styleEquals(p, newKwStyle) ? ' selected' : '');
-        StyleKit.renderPresetDot(dot, p, 18);
+        StyleKit.renderPresetDot(dot, p, 28);
         dot.title = '套用此样式';
         dot.addEventListener('click', function () {
           newKwStyle = StyleKit.cloneStyle(p);
@@ -649,7 +648,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         </div>`;
       document.body.appendChild(overlay2);
       setupModalClose(overlay2);
-      var ed = mountStyleEditor(overlay2.querySelector('#newKwStyleBody'), StyleKit.resolveStyle(newKwStyle, currentSettings));
+      var ed = mountStyleEditor(overlay2.querySelector('#newKwStyleBody'), StyleKit.resolveStyle(newKwStyle, currentSettings), StyleKit.keywordOverrides(newKwStyle));
       overlay2.querySelector('#newKwStyleCancel').addEventListener('click', function () { overlay2.remove(); });
       overlay2.querySelector('#newKwStyleSave').addEventListener('click', function () {
         newKwStyle = ed.read();
@@ -658,7 +657,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
     }
 
-    overlay.querySelector('#kwStyleBtn').addEventListener('click', openNewKwStyleModal);
     var kwPreviewEl = overlay.querySelector('#kwStylePreview');
     if (kwPreviewEl) kwPreviewEl.addEventListener('click', openNewKwStyleModal);
 
@@ -679,6 +677,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         bold: newKwStyle.bold,
         italic: newKwStyle.italic,
         underline: newKwStyle.underline,
+        strike: newKwStyle.strike,
         caseSensitive: overlay.querySelector('#kwCaseSensitive').classList.contains('active'),
         acrossElements: overlay.querySelector('#kwAcrossElements').classList.contains('active'),
         showRail: overlay.querySelector('#kwShowRail').checked,
@@ -764,7 +763,6 @@ document.addEventListener('DOMContentLoaded', async () => {
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
             <span id="editKwStylePreview" title="当前样式，点击编辑" style="cursor:pointer;"></span>
             <div id="editKwPresets" style="display:flex;gap:4px;flex-wrap:wrap;"></div>
-            <button class="btn btn-sm" id="editKwStyleBtn" type="button" title="自定义样式：背景色 / 文字颜色 / 字号 / 字形">自定义样式</button>
           </div>
         </div>
         <div class="form-group">
@@ -818,7 +816,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       stylePresets.forEach(function (p) {
         var dot = document.createElement('span');
         dot.className = 'kw-preset-dot' + (StyleKit.styleEquals(p, editStyle) ? ' selected' : '');
-        StyleKit.renderPresetDot(dot, p, 18);
+        StyleKit.renderPresetDot(dot, p, 28);
         dot.title = '套用此样式';
         dot.addEventListener('click', function () {
           editStyle = StyleKit.cloneStyle(p);
@@ -847,7 +845,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         </div>`;
       document.body.appendChild(overlay2);
       setupModalClose(overlay2);
-      var ed = mountStyleEditor(overlay2.querySelector('#editKwStyleBody'), editStyle);
+      var ed = mountStyleEditor(overlay2.querySelector('#editKwStyleBody'), editStyle, StyleKit.keywordOverrides(kw));
       overlay2.querySelector('#editStyleCancel').addEventListener('click', function () { overlay2.remove(); });
       overlay2.querySelector('#editStyleSave').addEventListener('click', function () {
         editStyle = ed.read();
@@ -855,7 +853,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         overlay2.remove();
       });
     }
-    overlay.querySelector('#editKwStyleBtn').addEventListener('click', openEditStyleModal);
     var editPreviewEl = overlay.querySelector('#editKwStylePreview');
     if (editPreviewEl) editPreviewEl.addEventListener('click', openEditStyleModal);
 
@@ -880,6 +877,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         bold: editStyle.bold,
         italic: editStyle.italic,
         underline: editStyle.underline,
+        strike: editStyle.strike,
         caseSensitive: overlay.querySelector('#editKwCaseSensitive').classList.contains('active'),
         acrossElements: overlay.querySelector('#editKwAcrossElements').classList.contains('active'),
         showRail: overlay.querySelector('#editKwShowRail').checked,

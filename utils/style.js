@@ -10,10 +10,11 @@ var StyleKit = (function () {
     fontSize: 1,
     bold: false,
     italic: false,
-    underline: false
+    underline: false,
+    strike: false
   };
 
-  var STYLE_KEYS = ['bgColor', 'textColor', 'fontSize', 'bold', 'italic', 'underline'];
+  var STYLE_KEYS = ['bgColor', 'textColor', 'fontSize', 'bold', 'italic', 'underline', 'strike'];
 
   // 关键词上的样式字段名（背景色沿用历史的 color，其余同名）
   var KEYWORD_FIELDS = {
@@ -22,7 +23,8 @@ var StyleKit = (function () {
     fontSize: 'fontSize',
     bold: 'bold',
     italic: 'italic',
-    underline: 'underline'
+    underline: 'underline',
+    strike: 'strike'
   };
 
   var MIN_FONT_SIZE = 0.5;
@@ -39,7 +41,8 @@ var StyleKit = (function () {
       fontSize: 1,
       bold: false,
       italic: false,
-      underline: false
+      underline: false,
+      strike: false
     };
   }
 
@@ -63,6 +66,7 @@ var StyleKit = (function () {
       p.bold = raw.bold === true;
       p.italic = raw.italic === true;
       p.underline = raw.underline === true;
+      p.strike = raw.strike === true;
       if (raw.id) p.id = raw.id;
     }
     if (!p.id) p.id = uid();
@@ -102,7 +106,8 @@ var StyleKit = (function () {
       fontSize: base.fontSize,
       bold: base.bold,
       italic: base.italic,
-      underline: base.underline
+      underline: base.underline,
+      strike: base.strike
     };
     if (!over) return s;
 
@@ -117,6 +122,7 @@ var StyleKit = (function () {
     if (over.bold !== undefined && over.bold !== null) s.bold = over.bold === true;
     if (over.italic !== undefined && over.italic !== null) s.italic = over.italic === true;
     if (over.underline !== undefined && over.underline !== null) s.underline = over.underline === true;
+    if (over.strike !== undefined && over.strike !== null) s.strike = over.strike === true;
 
     return s;
   }
@@ -146,6 +152,14 @@ var StyleKit = (function () {
     return 'inherit';
   }
 
+  // 下划线与删除线可叠加
+  function decorationOf(style) {
+    var parts = [];
+    if (style.underline) parts.push('underline');
+    if (style.strike) parts.push('line-through');
+    return parts.length ? parts.join(' ') : '';
+  }
+
   // 应用到 ah-mark / ah-spot 元素
   function applyToElement(el, style, hidden) {
     if (!el) return;
@@ -170,7 +184,7 @@ var StyleKit = (function () {
     el.style.fontSize = style.fontSize === 1 ? '' : style.fontSize + 'em';
     el.style.fontWeight = style.bold ? '700' : '';
     el.style.fontStyle = style.italic ? 'italic' : '';
-    el.style.textDecoration = style.underline ? 'underline' : '';
+    el.style.textDecoration = decorationOf(style);
   }
 
   // 预览块：只有背景 -> 整块填充；只有文字色 -> 文字 + 外框；内部按 em 缩放使字号差异可见
@@ -183,7 +197,7 @@ var StyleKit = (function () {
     if (!style) return false;
     if (typeof style.textColor === 'string' && style.textColor.charAt(0) === '#') return true;
     if (style.fontSize && style.fontSize !== 1) return true;
-    if (style.bold || style.italic || style.underline) return true;
+    if (style.bold || style.italic || style.underline || style.strike) return true;
     return false;
   }
 
@@ -214,7 +228,7 @@ var StyleKit = (function () {
     el.style.fontSize = Math.max(9, Math.round(base * (style.fontSize || 1))) + 'px';
     el.style.fontWeight = style.bold ? '700' : '400';
     el.style.fontStyle = style.italic ? 'italic' : 'normal';
-    el.style.textDecoration = style.underline ? 'underline' : 'none';
+    el.style.textDecoration = decorationOf(style) || 'none';
 
     // 预览块没有「页面原色」可继承，回退为对背景的反色或中性深色
     var tc = style.textColor;
@@ -259,7 +273,7 @@ var StyleKit = (function () {
     el.style.fontSize = Math.max(8, Math.round(size * 0.42 * (style.fontSize || 1))) + 'px';
     el.style.fontWeight = style.bold ? '700' : '400';
     el.style.fontStyle = style.italic ? 'italic' : 'normal';
-    el.style.textDecoration = style.underline ? 'underline' : 'none';
+    el.style.textDecoration = decorationOf(style) || 'none';
     var tc = (typeof style.textColor === 'string' && style.textColor.charAt(0) === '#')
       ? style.textColor
       : (hasBg ? contrastColor(style.bgColor) : '#333333');
@@ -275,7 +289,7 @@ var StyleKit = (function () {
       var vb = b[k];
       if (k === 'fontSize') {
         if (clampFontSize(va) !== clampFontSize(vb)) return false;
-      } else if (k === 'bold' || k === 'italic' || k === 'underline') {
+      } else if (k === 'bold' || k === 'italic' || k === 'underline' || k === 'strike') {
         if (!!va !== !!vb) return false;
       } else {
         if ((va || '') !== (vb || '')) return false;
@@ -284,7 +298,7 @@ var StyleKit = (function () {
     return true;
   }
 
-  // 关键词是否处于「跟随全局默认」态（六个字段都没有显式值）
+  // 关键词是否处于「跟随全局默认」态（所有字段都没有显式值）
   function isInheriting(kw) {
     if (!kw) return true;
     for (var i = 0; i < STYLE_KEYS.length; i++) {
@@ -331,6 +345,8 @@ var StyleKit = (function () {
     else kw.italic = style.italic === true;
     if (style.underline === undefined) delete kw.underline;
     else kw.underline = style.underline === true;
+    if (style.strike === undefined) delete kw.strike;
+    else kw.strike = style.strike === true;
     return kw;
   }
 
@@ -352,7 +368,8 @@ var StyleKit = (function () {
       clampFontSize(style.fontSize),
       style.bold ? '1' : '0',
       style.italic ? '1' : '0',
-      style.underline ? '1' : '0'
+      style.underline ? '1' : '0',
+      style.strike ? '1' : '0'
     ].join(',');
   }
 
@@ -384,6 +401,7 @@ var StyleKit = (function () {
     resolveStyle: resolveStyle,
     contrastColor: contrastColor,
     resolveTextColor: resolveTextColor,
+    decorationOf: decorationOf,
     applyToElement: applyToElement,
     renderPreview: renderPreview,
     makePreview: makePreview,

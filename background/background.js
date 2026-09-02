@@ -279,7 +279,8 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
               '|' + (item.textColor || '') +
               '|' + (item.bold ? '1' : '0') +
               '|' + (item.italic ? '1' : '0') +
-              '|' + (item.underline ? '1' : '0');
+              '|' + (item.underline ? '1' : '0') +
+              '|' + (item.strike ? '1' : '0');
             if (!seen[key]) { seen[key] = true; merged.push(item); }
           }
         }
