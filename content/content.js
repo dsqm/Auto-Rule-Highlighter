@@ -31,6 +31,9 @@
   var exclusiveStopOrder = -1;
   var pageDisabled = false;
   var highlightEverApplied = false;
+  // 匹配组号：跨元素匹配会把一次命中拆成多个 mark（如 关<span>键</span>词 -> 三段），
+  // 同一命中的所有片段共享一个组号，计数 / 跳转以「一次完整命中」为单位
+  var matchGroupCounter = 0;
   var domOrderCache = new WeakMap();
   var domOrderCounter = 0;
   var highlightDirty = false;
@@ -127,6 +130,7 @@
       var kwOrders = {};
       var kwExclusive = {};
       var visibleTotal = 0;
+      var seenGroups = {};
       for (var i = 0; i < marks.length; i++) {
         var m = marks[i];
         var kwId = m.dataset.ahKeywordId;
@@ -139,6 +143,10 @@
         if (isManuallyHidden && !isManuallyShown) continue;
         if (isHiddenByExclusive && !isManuallyShown) continue;
         if (m.dataset.ahHidden === 'true' && !isManuallyShown) continue;
+        // 同一命中的多个片段只计一次
+        var gkey = kwId + '\x00' + (m.dataset.ahGroupId || 'm' + i);
+        if (seenGroups[gkey]) continue;
+        seenGroups[gkey] = true;
         visibleTotal++;
         if (!keywordMap[kwId]) keywordMap[kwId] = 0;
         keywordMap[kwId]++;
@@ -177,7 +185,7 @@
       navigateToMarkAt(msg.kwId, msg.localIndex, msg.globalIndex, msg.globalTotal, msg.isRetry === true);
     }
     if (msg.type === 'GET_KW_COUNT') {
-      sendResponse({ count: getVisibleKwMarks(msg.kwId).length });
+      sendResponse({ count: getVisibleKwGroups(msg.kwId).length });
       return true;
     }
     if (msg.type === 'CONTEXT_ADD_HIGHLIGHT') {
@@ -791,6 +799,8 @@
   }
 
   function applyCrossNodeMatch(nodeGroup, offsets, match) {
+    // 一次命中可能横跨多个文本节点，拆出的每个片段 mark 共享同一组号
+    if (!match.groupId) match.groupId = ++matchGroupCounter;
     var startOffset = match.start;
     var endOffset = match.end;
 
@@ -826,6 +836,7 @@
       mark.dataset.ahShowRail = match.showRail ? '1' : '0';
       mark.dataset.ahExclusive = match.exclusive ? '1' : '0';
       mark.dataset.ahGlobalOrder = String(match.globalOrder);
+      mark.dataset.ahGroupId = String(match.groupId);
 
       var isTempKw = match.keywordId && match.keywordId.indexOf('tmp_') === 0;
       var matchHide = match._hide !== undefined ? match._hide : (!isTempKw && exclusiveStopOrder >= 0 && match.globalOrder !== exclusiveStopOrder);
@@ -840,6 +851,7 @@
   function updateBadge() {
     var marks = getAllHighlightMarks();
     var count = 0;
+    var seenGroups = {};
     for (var i = 0; i < marks.length; i++) {
       var m = marks[i];
       var kwId = m.dataset.ahKeywordId;
@@ -848,10 +860,14 @@
       var isManuallyShown = manualShowKwIds.indexOf(kwId) >= 0;
       var isManuallyHidden = hiddenKwIds.indexOf(kwId) >= 0;
       var isHiddenByExclusive = !isTempKw && exclusiveStopOrder >= 0 && !isNaN(order) && order !== exclusiveStopOrder;
-      
+
       if (isManuallyHidden && !isManuallyShown) continue;
       if (isHiddenByExclusive && !isManuallyShown) continue;
       if (m.dataset.ahHidden === 'true' && !isManuallyShown) continue;
+      // 与弹窗计数同口径：同一命中的多个片段只计一次
+      var gkey = kwId + '\x00' + (m.dataset.ahGroupId || 'm' + i);
+      if (seenGroups[gkey]) continue;
+      seenGroups[gkey] = true;
       count++;
     }
     try {
@@ -1202,6 +1218,7 @@
       mark.dataset.ahShowRail = match.showRail ? '1' : '0';
       mark.dataset.ahExclusive = match.exclusive ? '1' : '0';
       mark.dataset.ahGlobalOrder = String(match.globalOrder);
+      mark.dataset.ahGroupId = String(++matchGroupCounter);
       // 样式走 class（规则在 <style> 里统一注入），隐藏态叠加 .ah-hidden
       mark.className = match._hide ? classForMatch(match) + ' ah-hidden' : classForMatch(match);
       mark.dataset.ahHidden = match._hide ? 'true' : '';
@@ -1527,13 +1544,16 @@
     }
   }
 
-  /** 与 GET_HIGHLIGHT_COUNT 同口径收集本 frame 内该关键词的可见 mark，保证导航计数与弹窗计数一致 */
-  function getVisibleKwMarks(kwId) {
+  /** 与 GET_HIGHLIGHT_COUNT 同口径收集本 frame 内该关键词的可见匹配组。
+   *  跨元素匹配会把一个词拆成多个相邻 mark（如 关<span>键</span>词 -> 关/键/词 三段），
+   *  按 ahGroupId 聚成一组：计数与跳转都以「一次完整命中」为单位 */
+  function getVisibleKwGroups(kwId) {
     var allMarks = getAllHighlightMarks();
-    var kwMarks = [];
     var isTempKw = kwId && kwId.indexOf('tmp_') === 0;
     var isManuallyShown = manualShowKwIds.indexOf(kwId) >= 0;
     var isManuallyHidden = hiddenKwIds.indexOf(kwId) >= 0;
+    var groupMap = {};
+    var groupIds = [];
     for (var i = 0; i < allMarks.length; i++) {
       var m = allMarks[i];
       if (m.dataset.ahKeywordId !== kwId) continue;
@@ -1543,9 +1563,18 @@
       if (isHiddenByExclusive && !isManuallyShown) continue;
       if (m.dataset.ahHidden === 'true' && !isManuallyShown) continue;
       if (!m.isConnected) continue;
-      kwMarks.push(m);
+      var gid = m.dataset.ahGroupId || ('solo_' + i);
+      if (!groupMap[gid]) { groupMap[gid] = []; groupIds.push(gid); }
+      groupMap[gid].push(m);
     }
-    return kwMarks;
+    var groups = [];
+    for (var g = 0; g < groupIds.length; g++) {
+      var marks = groupMap[groupIds[g]];
+      marks.sort(function (a, b) { return getElTopPosition(a) - getElTopPosition(b); });
+      groups.push(marks);
+    }
+    groups.sort(function (a, b) { return getElTopPosition(a[0]) - getElTopPosition(b[0]); });
+    return groups;
   }
 
   function navigateToSpotMark(kwId) {
@@ -1573,10 +1602,10 @@
     } catch (e) {}
   }
 
-  /** 跳转到本 frame 内第 localIndex 个（0 起）可见 mark；全局序号由 background 计算后一并带回 */
+  /** 跳转到本 frame 内第 localIndex 个（0 起）可见匹配组；全局序号由 background 计算后一并带回 */
   function navigateToMarkAt(kwId, localIndex, globalIndex, globalTotal, isRetry) {
-    var kwMarks = getVisibleKwMarks(kwId);
-    if (kwMarks.length === 0) {
+    var groups = getVisibleKwGroups(kwId);
+    if (groups.length === 0) {
       // 兜底：懒加载区域的目标可能尚未生成 mark，强制全量高亮后重试一次；isRetry 防止死循环
       if (!isRetry) {
         forceFullHighlight = true;
@@ -1586,23 +1615,26 @@
       return;
     }
 
-    kwMarks.sort(function (a, b) {
-      return getElTopPosition(a) - getElTopPosition(b);
-    });
-
     if (!(localIndex >= 0)) localIndex = 0;
-    if (localIndex >= kwMarks.length) localIndex = kwMarks.length - 1;
+    if (localIndex >= groups.length) localIndex = groups.length - 1;
 
-    var target = kwMarks[localIndex];
+    var group = groups[localIndex];
+    var target = group[0];
     if (!target || !target.isConnected) return;
 
     try { target.scrollIntoView({ block: 'center' }); } catch (e) {}
     // 同源 iframe 内的目标：把 iframe 自身也滚进父页面视口，避免父页面纹丝不动
     try { if (isInIframe && window.frameElement) window.frameElement.scrollIntoView({ block: 'center' }); } catch (e) {}
+    // 整组闪烁：跨元素匹配拆出的多个片段一起亮，视觉上是一次完整命中
     if (activeHighlight) activeHighlight.classList.remove('ah-blinking');
+    for (var gi = 0; gi < group.length; gi++) group[gi].classList.add('ah-blinking');
     activeHighlight = target;
-    activeHighlight.classList.add('ah-blinking');
-    setTimeout(function () { if (activeHighlight) activeHighlight.classList.remove('ah-blinking'); }, 900);
+    var blinkGroup = group;
+    setTimeout(function () {
+      for (var bi = 0; bi < blinkGroup.length; bi++) {
+        if (blinkGroup[bi].isConnected) blinkGroup[bi].classList.remove('ah-blinking');
+      }
+    }, 900);
 
     try {
       chrome.runtime.sendMessage({ type: 'NAV_MARK_RESULT', kwId: kwId, index: globalIndex, total: globalTotal });

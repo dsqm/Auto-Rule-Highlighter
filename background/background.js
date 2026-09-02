@@ -565,7 +565,7 @@ function updateBadge(tabId, count) {
   if (disabledTabs[tabId]) return;
   var text = '';
   if (count > 0) {
-    text = count > 99 ? '99+' : String(count);
+    text = count > 999 ? '999+' : String(count);
   }
   chrome.action.setBadgeText({ text: text, tabId: tabId }).catch(function () {});
   chrome.action.setBadgeBackgroundColor({ color: '#666666', tabId: tabId }).catch(function () {});
