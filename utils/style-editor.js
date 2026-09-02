@@ -342,10 +342,10 @@ var StyleEditor = (function () {
           '<button class="toggle-opt-btn across' + (state.acrossElements ? ' active' : '') + '" data-role="across" title="跨元素匹配" type="button">↔</button>' +
           extra +
         '</div>' +
-        '<div class="toggle-options-row">' +
+        '<div class="toggle-options-row" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">' +
           '<span class="kw-style-preview" title="当前样式，点击编辑" style="cursor:pointer;"></span>' +
-          '<span class="v-sep"></span>' +
-          '<div class="kw-presets-row" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;"></div>' +
+          '<span class="v-sep" style="margin:0 4px;"></span>' +
+          '<div class="kw-presets-row" style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;flex:1;min-width:0;"></div>' +
         '</div>';
       previewEl = container.querySelector('.kw-style-preview');
       presetsEl = container.querySelector('.kw-presets-row');

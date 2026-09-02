@@ -93,8 +93,26 @@ var StyleKit = (function () {
     return normalizePreset(base);
   }
 
+  // 出厂预设：8 个背景色（文字自动反色，随背景亮度取黑/白）+ 8 个纯文字色（无背景）
   function getDefaultPresets() {
-    return normalizePresets(['#ffeb3b', '#ff6b6b', '#a8e6cf', '#ffd93d', '#6bcb77', '#4d96ff', '#c084fc', '#fb923c']);
+    return normalizePresets([
+      { bgColor: '#ffeb3b', textColor: null },
+      { bgColor: '#ff6b6b', textColor: null },
+      { bgColor: '#a8e6cf', textColor: null },
+      { bgColor: '#ffd93d', textColor: null },
+      { bgColor: '#6bcb77', textColor: null },
+      { bgColor: '#4d96ff', textColor: null },
+      { bgColor: '#c084fc', textColor: null },
+      { bgColor: '#fb923c', textColor: null },
+      { bgColor: '', textColor: '#c0392b' },
+      { bgColor: '', textColor: '#d35400' },
+      { bgColor: '', textColor: '#27ae60' },
+      { bgColor: '', textColor: '#2980b9' },
+      { bgColor: '', textColor: '#8e44ad' },
+      { bgColor: '', textColor: '#16a085' },
+      { bgColor: '', textColor: '#d81b60' },
+      { bgColor: '', textColor: '#6d4c41' }
+    ]);
   }
 
   // 关键词覆写叠加到基底样式上，空值表示继承
@@ -243,6 +261,16 @@ var StyleKit = (function () {
     el.appendChild(badge);
   }
 
+  /** 自动反色预览色：A 用按背景取出的黑/白（自动反色结果），a 用相反色 */
+  function autoInvertPair(style, hasBg, fallback) {
+    var main;
+    if (typeof style.textColor === 'string' && style.textColor.charAt(0) === '#') main = style.textColor;
+    else main = hasBg ? contrastColor(style.bgColor) : fallback;
+    // 只有自动反色（textColor === null）才双色；其余一律同色（保持原色回退色也是单色）
+    if (style.textColor !== null) return { main: main, alt: main };
+    return { main: main, alt: main === '#ffffff' ? '#000000' : '#ffffff' };
+  }
+
   function renderPreview(el, style, w, h) {
     if (!el) return;
     el.style.boxSizing = 'border-box';
@@ -267,20 +295,23 @@ var StyleKit = (function () {
     // 只有字号差异不渲染 Aa（字号不算文本样式），仅以右上角 +/− 角标表达；
     // 其余无文本样式的情况：只显示背景色（或透明边框占位）
     if (styleHasText(style)) {
-      var textEl = document.createElement('span');
-      textEl.textContent = 'Aa';
-      // 文字固定基准大小，字号变化交给右上角角标表达
-      textEl.style.fontSize = Math.max(9, Math.round(h * 0.46)) + 'px';
-      textEl.style.fontWeight = style.bold ? '700' : '400';
-      textEl.style.fontStyle = style.italic ? 'italic' : 'normal';
-      textEl.style.textDecoration = decorationOf(style) || 'none';
-
       // 预览块没有「页面原色」可继承，回退为对背景的反色或中性深色
-      var tc = style.textColor;
-      if (tc !== 'inherit' && (!tc || tc.charAt(0) !== '#')) tc = null;
-      if (!tc) tc = hasBg ? contrastColor(style.bgColor) : '#333333';
-      textEl.style.color = tc;
-      el.appendChild(textEl);
+      var colors = autoInvertPair(style, hasBg, '#333333');
+      var wrap = document.createElement('span');
+      wrap.style.fontSize = Math.max(9, Math.round(h * 0.46)) + 'px';
+      wrap.style.fontWeight = style.bold ? '700' : '400';
+      wrap.style.fontStyle = style.italic ? 'italic' : 'normal';
+      wrap.style.textDecoration = decorationOf(style) || 'none';
+      // 自动反色：A/a 一黑一白（A 是反色结果、a 是相反色），一眼区分「自动反色」与固定黑色字
+      var chA = document.createElement('span');
+      chA.textContent = 'A';
+      chA.style.color = colors.main;
+      var cha = document.createElement('span');
+      cha.textContent = 'a';
+      cha.style.color = colors.alt;
+      wrap.appendChild(chA);
+      wrap.appendChild(cha);
+      el.appendChild(wrap);
     }
 
     appendFsBadge(el, style);
@@ -319,18 +350,23 @@ var StyleKit = (function () {
     el.innerHTML = '';
 
     if (styleHasText(style)) {
-      var textEl = document.createElement('span');
-      textEl.textContent = 'Aa';
+      var colors = autoInvertPair(style, hasBg, '#333333');
+      var wrap = document.createElement('span');
       // 文字固定基准大小，字号变化交给右上角角标表达
-      textEl.style.fontSize = Math.max(8, Math.round(size * 0.42)) + 'px';
-      textEl.style.fontWeight = style.bold ? '700' : '400';
-      textEl.style.fontStyle = style.italic ? 'italic' : 'normal';
-      textEl.style.textDecoration = decorationOf(style) || 'none';
-      var tc = (typeof style.textColor === 'string' && style.textColor.charAt(0) === '#')
-        ? style.textColor
-        : (hasBg ? contrastColor(style.bgColor) : '#333333');
-      textEl.style.color = tc;
-      el.appendChild(textEl);
+      wrap.style.fontSize = Math.max(8, Math.round(size * 0.42)) + 'px';
+      wrap.style.fontWeight = style.bold ? '700' : '400';
+      wrap.style.fontStyle = style.italic ? 'italic' : 'normal';
+      wrap.style.textDecoration = decorationOf(style) || 'none';
+      // 自动反色：A/a 一黑一白（A 是反色结果、a 是相反色），一眼区分「自动反色」与固定黑色字
+      var chA = document.createElement('span');
+      chA.textContent = 'A';
+      chA.style.color = colors.main;
+      var cha = document.createElement('span');
+      cha.textContent = 'a';
+      cha.style.color = colors.alt;
+      wrap.appendChild(chA);
+      wrap.appendChild(cha);
+      el.appendChild(wrap);
     }
 
     appendFsBadge(el, style);

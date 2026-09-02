@@ -128,17 +128,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     var dragIndex = null;
     stylePresets.forEach(function (p, i) {
       const block = document.createElement('div');
-      block.className = 'style-preset-block' + (i === 0 ? ' is-default' : '');
+      block.className = 'style-preset-block';
       block.draggable = true;
       const preview = document.createElement('span');
       StyleKit.renderPresetDot(preview, p, 28);
       block.appendChild(preview);
-      if (i === 0) {
-        const badge = document.createElement('span');
-        badge.className = 'style-preset-badge';
-        badge.textContent = '默认';
-        block.appendChild(badge);
-      }
       const editBtn = document.createElement('span');
       editBtn.className = 'preset-edit';
       editBtn.textContent = '✎';
@@ -222,7 +216,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   btnAddPreset.addEventListener('click', function () {
-    if (stylePresets.length >= 12) { showToast('最多支持 12 个样式预设'); return; }
+    if (stylePresets.length >= 26) { showToast('最多支持 26 个样式预设'); return; }
     // 新预设从全局默认复制一份，用户在此基础上改
     stylePresets.push(StyleKit.cloneStyle(stylePresets[0]));
     renderStylePresets();
