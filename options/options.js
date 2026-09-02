@@ -384,7 +384,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           <div class="rule-actions">
             <button class="btn btn-sm" data-action="manage-keywords" data-rule-id="${rule.id}">管理关键词</button>
             <button class="btn btn-sm" data-action="edit-rule" data-rule-id="${rule.id}">编辑</button>
-            <button class="btn btn-sm btn-danger" data-action="delete-rule" data-rule-id="${rule.id}">删除</button>
+            <button class="btn btn-sm btn-danger" data-action="delete-rule" data-rule-id="${rule.id}" ${rule.enabled ? 'disabled' : ''} title="${rule.enabled ? '请先关闭规则再删除' : '删除规则'}">删除</button>
           </div>
         </div>
       </div>`;
@@ -525,7 +525,9 @@ document.addEventListener('DOMContentLoaded', async () => {
               <option value="regex">正则</option>
               <option value="wildcard">通配</option>
             </select>
+            <!-- 管理关键词弹窗：当前样式方块 与 预设圆 之间的分隔线（.v-sep） -->
             <span id="kwStylePreview" title="当前样式，点击编辑" style="cursor:pointer;"></span>
+            <span class="v-sep"></span>
             <div id="kwPresetsRow" style="display:flex;gap:4px;align-items:center;"></div>
             <button class="toggle-opt-btn" id="kwCaseSensitive" title="区分大小写" type="button">Aa</button>
             <button class="toggle-opt-btn across" id="kwAcrossElements" title="跨元素匹配" type="button">↔</button>
@@ -760,8 +762,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         </div>
         <div class="form-group">
           <label>样式</label>
+          <!-- 编辑关键词样式弹窗：当前样式方块 与 预设圆 之间的分隔线（.v-sep） -->
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
             <span id="editKwStylePreview" title="当前样式，点击编辑" style="cursor:pointer;"></span>
+            <span class="v-sep"></span>
             <div id="editKwPresets" style="display:flex;gap:4px;flex-wrap:wrap;"></div>
           </div>
         </div>

@@ -15,6 +15,9 @@
     .btn-primary:hover { background: #40a9ff; color: #fff; }
     .btn-danger { color: #ff4d4f; border-color: #ff4d4f; }
     .btn-danger:hover { background: #fff1f0; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn:disabled:hover { border-color: #d9d9d9; color: #d9d9d9; background: #fff; }
+    .btn-danger:disabled, .btn-danger:disabled:hover { color: #bbb; border-color: #e0e0e0; background: #f5f5f5; }
     .btn-sm { padding: 3px 10px; font-size: 12px; }
     .empty { text-align: center; padding: 40px 20px; color: #999; }
     .empty p { margin-bottom: 8px; }
@@ -37,6 +40,7 @@
     .form-group input:focus, .form-group select:focus { border-color: #1890ff; }
     .form-group .checkbox-row { display: flex; align-items: center; gap: 8px; }
     .form-group .checkbox-row input { width: auto; }
+    .v-sep { width: 2px; height: 18px; background: #d0d0d0; flex-shrink: 0; align-self: center; margin: 0 4px; border-radius: 1px; }
     .color-input { width: 50px !important; height: 32px; padding: 2px !important; cursor: pointer; }
 
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; z-index: 100; }
