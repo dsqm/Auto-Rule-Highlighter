@@ -204,7 +204,21 @@ var StyleEditor = (function () {
       if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v)) bgColor.value = v;
     });
 
-    textToggle.addEventListener('change', sync);
+    /** 基于当前背景色取反色，用于勾选文字开关时的自动填充 */
+    function contrastFor(hex) {
+      var v = hex && hex.charAt(0) === '#' ? hex : bgHex.value;
+      return StyleKit.contrastColor(v);
+    }
+
+    textToggle.addEventListener('change', function () {
+      if (textToggle.checked && !textHex.value.trim() && !autoInvertCb.checked) {
+        // 勾选文字但没选自动反色、也没填色：自动填充基于背景的反色，可再手动调整
+        var c = contrastFor(bgHex.value.trim());
+        textHex.value = c;
+        textColor.value = c;
+      }
+      sync();
+    });
     autoInvertCb.addEventListener('change', function () {
       if (autoInvertCb.checked) {
         // 与自定义颜色互斥：勾选自动反色时清空颜色（颜色控件由 sync 置灰）

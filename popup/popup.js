@@ -514,13 +514,10 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
     if (cppTarget.isSpot) {
-      // spot 只跟随背景色；背景开关关闭（未设置）时保持原色不动
-      var bg = overrides.bgColor;
-      if (bg !== undefined) {
-        chrome.runtime.sendMessage({ type: 'UPDATE_SPOT_COLOR', spotId: cppTarget.spotId, color: bg }).catch(function () {});
-        var spot = spotKeywords.find(function (s) { return s.id === cppTarget.spotId; });
-        if (spot) spot.color = bg;
-      }
+      // spot 应用整个样式（背景 + 文字含自动反色），并更新本地与后台存储
+      chrome.runtime.sendMessage({ type: 'UPDATE_SPOT_STYLE', spotId: cppTarget.spotId, style: overrides }).catch(function () {});
+      var spot = spotKeywords.find(function (s) { return s.id === cppTarget.spotId; });
+      if (spot) Object.assign(spot, StyleKit.keywordOverrides(overrides));
       closeColorPicker();
       renderAll();
       return;
@@ -554,6 +551,63 @@ document.addEventListener('DOMContentLoaded', function () {
       hiddenIds: Array.from(hiddenKwIds),
       manualShowIds: Array.from(manualShowKwIds)
     }).catch(function () {});
+  }
+
+  /** 临时高亮保存为永久规则：自渲染网址输入弹窗，替代原生 prompt，与弹窗风格统一 */
+  function showSaveUrlModal(kw) {
+    var overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML =
+      '<div class="modal">' +
+        '<h3>永久保存关键词到规则</h3>' +
+        '<div class="modal-tip">请输入匹配的网址（当前网站：' + escapeHtml(currentTabHost) + '）</div>' +
+        '<input type="text" id="saveUrlInput" value="' + escapeHtml(currentTabHost) + '">' +
+        '<div class="modal-actions">' +
+          '<button class="btn" id="saveUrlCancel">取消</button>' +
+          '<button class="btn btn-primary" id="saveUrlOk">保存</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+
+    var input = overlay.querySelector('#saveUrlInput');
+    var okBtn = overlay.querySelector('#saveUrlOk');
+    var cancelBtn = overlay.querySelector('#saveUrlCancel');
+
+    function close() { overlay.remove(); }
+    function submit() {
+      var urlPattern = input.value.trim();
+      if (!urlPattern) { input.focus(); return; }
+      close();
+      persistTempKeyword(kw, urlPattern);
+    }
+
+    okBtn.addEventListener('click', submit);
+    cancelBtn.addEventListener('click', close);
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); submit(); }
+      if (e.key === 'Escape') close();
+    });
+    input.focus();
+    input.select();
+  }
+
+  async function persistTempKeyword(kw, urlPattern) {
+    var allRules = await Storage.getRules();
+    var existingRule = allRules.find(function (r) { return r.urlPattern === urlPattern; });
+    var kwData = { text: kw.text, matchType: kw.matchType, caseSensitive: kw.caseSensitive, acrossElements: kw.acrossElements, color: kw.color, textColor: kw.textColor, fontSize: kw.fontSize, bold: kw.bold, italic: kw.italic, underline: kw.underline, strike: kw.strike };
+    if (existingRule) {
+      await Storage.addKeyword(existingRule.id, kwData);
+    } else {
+      var newRule = await Storage.addRule({ urlPattern: urlPattern, urlMatchType: 'contains' });
+      await Storage.addKeyword(newRule.id, kwData);
+    }
+    tempKeywords = tempKeywords.filter(function (k) { return k.id !== kw.id; });
+    hiddenKwIds.delete(kw.id);
+    manualShowKwIds.delete(kw.id);
+    chrome.runtime.sendMessage({ type: 'RULES_CHANGED' }).catch(function () {});
+    sendTempHighlight();
+    sendHiddenIds();
+    loadMatchedRules();
   }
 
   pageToggle.addEventListener('change', function () {
@@ -785,23 +839,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (action === 'save-temp') {
       var kw = tempKeywords.find(function (k) { return k.id === kwId; });
       if (!kw) return;
-      var urlPattern = prompt('永久保存关键词到规则\n\n请输入匹配的网址（当前网站: ' + currentTabHost + '）：', currentTabHost);
-      if (!urlPattern || !urlPattern.trim()) return;
-      var allRules = await Storage.getRules();
-      var existingRule = allRules.find(function (r) { return r.urlPattern === urlPattern.trim(); });
-      if (existingRule) {
-        await Storage.addKeyword(existingRule.id, { text: kw.text, matchType: kw.matchType, caseSensitive: kw.caseSensitive, acrossElements: kw.acrossElements, color: kw.color, textColor: kw.textColor, fontSize: kw.fontSize, bold: kw.bold, italic: kw.italic, underline: kw.underline, strike: kw.strike });
-      } else {
-        var newRule = await Storage.addRule({ urlPattern: urlPattern.trim(), urlMatchType: 'contains' });
-        await Storage.addKeyword(newRule.id, { text: kw.text, matchType: kw.matchType, caseSensitive: kw.caseSensitive, acrossElements: kw.acrossElements, color: kw.color, textColor: kw.textColor, fontSize: kw.fontSize, bold: kw.bold, italic: kw.italic, underline: kw.underline, strike: kw.strike });
-      }
-      tempKeywords = tempKeywords.filter(function (k) { return k.id !== kwId; });
-      hiddenKwIds.delete(kwId);
-      manualShowKwIds.delete(kwId);
-      chrome.runtime.sendMessage({ type: 'RULES_CHANGED' }).catch(function () {});
-      sendTempHighlight();
-      sendHiddenIds();
-      loadMatchedRules();
+      showSaveUrlModal(kw);
     }
 
     if (action === 'toggle-rule-kw') {

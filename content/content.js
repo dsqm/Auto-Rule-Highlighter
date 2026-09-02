@@ -202,22 +202,13 @@
     if (msg.type === 'CONTEXT_SPOT_HIGHLIGHT') {
       var spotSelText = msg.text;
       if (!spotSelText) return;
-      var spotColor = getRandomDistinctColor();
+      var spotStyle = getNextSpotStyle();
       var spotId = 's_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-      var spotEl = highlightSelectedRange(spotSelText, spotColor);
-      if (spotEl) {
-        spotEl.dataset.ahSpotId = spotId;
-        var siblings = spotEl.parentElement.querySelectorAll('ah-spot');
-        var found = false;
-        for (var si = 0; si < siblings.length; si++) {
-          if (!siblings[si].dataset.ahSpotId && siblings[si].style.backgroundColor === spotEl.style.backgroundColor) {
-            siblings[si].dataset.ahSpotId = spotId;
-            found = true;
-          }
-        }
-      }
+      // 所有片段在创建时已统一带上 spotId，无需兄弟反查
+      highlightSelectedRange(spotSelText, spotStyle, spotId);
       try {
-        chrome.runtime.sendMessage({ type: 'STORE_SPOT_HIGHLIGHT', spotId: spotId, text: spotSelText, color: spotColor });
+        // 存完整样式（含自动反色等文字配置），popup 预览/编辑才能还原
+        chrome.runtime.sendMessage({ type: 'STORE_SPOT_HIGHLIGHT', spotId: spotId, text: spotSelText, style: spotStyle });
       } catch (e) {}
       var spotSettingsResp = {};
       try { spotSettingsResp = currentSettings || {}; } catch (e4) {}
@@ -237,20 +228,13 @@
     if (msg.type === 'SHORTCUT_SPOT_HIGHLIGHT') {
       var spotSelText = window.getSelection().toString();
       if (!spotSelText) return;
-      var spotColor = getRandomDistinctColor();
+      var spotStyle = getNextSpotStyle();
       var spotId = 's_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-      var spotEl = highlightSelectedRange(spotSelText, spotColor);
-      if (spotEl) {
-        spotEl.dataset.ahSpotId = spotId;
-        var siblings = spotEl.parentElement.querySelectorAll('ah-spot');
-        for (var si = 0; si < siblings.length; si++) {
-          if (!siblings[si].dataset.ahSpotId && siblings[si].style.backgroundColor === spotEl.style.backgroundColor) {
-            siblings[si].dataset.ahSpotId = spotId;
-          }
-        }
-      }
+      // 所有片段在创建时已统一带上 spotId，无需兄弟反查
+      highlightSelectedRange(spotSelText, spotStyle, spotId);
       try {
-        chrome.runtime.sendMessage({ type: 'STORE_SPOT_HIGHLIGHT', spotId: spotId, text: spotSelText, color: spotColor });
+        // 存完整样式（含自动反色等文字配置），popup 预览/编辑才能还原
+        chrome.runtime.sendMessage({ type: 'STORE_SPOT_HIGHLIGHT', spotId: spotId, text: spotSelText, style: spotStyle });
         chrome.runtime.sendMessage({ type: 'SHORTCUT_HIGHLIGHT_DONE', action: 'spot' });
       } catch (e) {}
     }
@@ -259,6 +243,9 @@
     }
     if (msg.type === 'UPDATE_SPOT_COLOR') {
       updateSpotColor(msg.spotId, msg.color);
+    }
+    if (msg.type === 'UPDATE_SPOT_STYLE') {
+      updateSpotStyle(msg.spotId, msg.style || {});
     }
   });
 
@@ -279,15 +266,15 @@
         setTimeout(requestRulesFromBackground, 1500);
         return;
       }
-      if (response && response.length > 0) {
-        var rules = response;
-        chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, function (settings) {
-          if (chrome.runtime.lastError) settings = {};
-          // 必须传局部变量：applyHighlight 要拿 rules 与 currentRules（旧值）对比，
-          // 若先把结果写回 currentRules 再传自身，unchanged 恒为 true，首次高亮会被短路
-          applyHighlight(rules, settings || {});
-        });
-      }
+      var rules = response || [];
+      // 即使没有匹配规则也要拿设置：currentSettings 里存着预设（含自动反色），
+      // 否则「高亮此处」在无规则页面上取不到预设样式
+      chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, function (settings) {
+        if (chrome.runtime.lastError) settings = {};
+        // 必须传局部变量：applyHighlight 要拿 rules 与 currentRules（旧值）对比，
+        // 若先把结果写回 currentRules 再传自身，unchanged 恒为 true，首次高亮会被短路
+        applyHighlight(rules, settings || {});
+      });
     });
   }
 
@@ -877,30 +864,90 @@
 
   var ALL_SPOT_COLORS = ['#ffeb3b','#ff6b6b','#a8e6cf','#ffd93d','#6bcb77','#4d96ff','#c084fc','#fb923c','#f48fb1','#80cbc4','#b39ddb','#90caf9','#fff176','#ffab91','#a5d6a7','#ce93d8'];
 
-  function getRandomDistinctColor() {
-    var usedColors = [];
-    var tempMarks = document.querySelectorAll(HIGHLIGHT_TAG);
-    for (var i = 0; i < tempMarks.length; i++) {
-      var color = tempMarks[i].style.backgroundColor;
-      if (color && usedColors.indexOf(color) === -1) usedColors.push(color);
-    }
-    var spotMarks = document.querySelectorAll('ah-spot');
-    for (var j = 0; j < spotMarks.length; j++) {
-      var sc = spotMarks[j].style.backgroundColor;
-      if (sc && usedColors.indexOf(sc) === -1) usedColors.push(sc);
-    }
-    for (var ti = 0; ti < tempKeywords.length; ti++) {
-      var tc = tempKeywords[ti].color;
-      if (tc && usedColors.indexOf(tc) === -1) usedColors.push(tc);
-    }
-    var shuffled = ALL_SPOT_COLORS.slice().sort(function () { return Math.random() - 0.5; });
-    for (var si = 0; si < shuffled.length; si++) {
-      if (usedColors.indexOf(shuffled[si]) === -1) return shuffled[si];
-    }
-    return shuffled[Math.floor(Math.random() * shuffled.length)];
+  // 计算后的 style.backgroundColor 是 rgb(...) 格式，与预设的 hex 比较前统一转 hex，
+  // 否则去重永远失败、每次都取到第一个默认色
+  function normalizeColorHex(c) {
+    if (!c) return '';
+    if (c.charAt(0) === '#') return c.toLowerCase();
+    var m = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/.exec(c);
+    if (!m) return '';
+    return '#' + [m[1], m[2], m[3]].map(function (n) {
+      var h = parseInt(n, 10).toString(16);
+      return h.length === 1 ? '0' + h : h;
+    }).join('');
   }
 
-  function highlightSelectedRange(text, color) {
+  // 收集页面上已用过的背景色（统一转 hex，style.backgroundColor 是 rgb 格式）
+  function collectUsedColors() {
+    var usedColors = [];
+    function addUsed(c) {
+      c = normalizeColorHex(c);
+      if (c && usedColors.indexOf(c) === -1) usedColors.push(c);
+    }
+    var tempMarks = document.querySelectorAll(HIGHLIGHT_TAG);
+    for (var i = 0; i < tempMarks.length; i++) addUsed(tempMarks[i].style.backgroundColor);
+    var spotMarks = document.querySelectorAll('ah-spot');
+    for (var j = 0; j < spotMarks.length; j++) addUsed(spotMarks[j].style.backgroundColor);
+    for (var k = 0; k < tempKeywords.length; k++) addUsed(tempKeywords[k].color);
+    return usedColors;
+  }
+
+  // 取色池 = 用户预设背景色（按顺序）+ 扩展色兜底
+  function presetColorPool() {
+    var pool = [];
+    var presets = (currentSettings && Array.isArray(currentSettings.stylePresets) && currentSettings.stylePresets.length)
+      ? currentSettings.stylePresets
+      : ((currentSettings && Array.isArray(currentSettings.colorPresets) && currentSettings.colorPresets.length)
+        ? currentSettings.colorPresets : null);
+    if (presets) {
+      for (var pi = 0; pi < presets.length; pi++) {
+        var pc = presets[pi] && presets[pi].bgColor;
+        if (pc && pool.indexOf(pc) === -1) pool.push(pc);
+      }
+    }
+    for (var ci = 0; ci < ALL_SPOT_COLORS.length; ci++) {
+      if (pool.indexOf(ALL_SPOT_COLORS[ci]) === -1) pool.push(ALL_SPOT_COLORS[ci]);
+    }
+    return pool;
+  }
+
+  // 临时关键词取色：只取背景色，按预设顺序，全部用过才随机
+  function getRandomDistinctColor() {
+    var usedColors = collectUsedColors();
+    var pool = presetColorPool();
+    for (var si = 0; si < pool.length; si++) {
+      if (usedColors.indexOf(normalizeColorHex(pool[si])) === -1) return pool[si];
+    }
+    return ALL_SPOT_COLORS[Math.floor(Math.random() * ALL_SPOT_COLORS.length)];
+  }
+
+  /** spot 用完整预设：背景色 + 文字样式（含自动反色）整体取自同一个预设，
+   *  预设全部用过才回退到扩展色（文字样式跟随全局默认） */
+  function getNextSpotStyle() {
+    var usedColors = collectUsedColors();
+    var presets = (currentSettings && Array.isArray(currentSettings.stylePresets) && currentSettings.stylePresets.length)
+      ? currentSettings.stylePresets
+      : ((currentSettings && Array.isArray(currentSettings.colorPresets) && currentSettings.colorPresets.length)
+        ? currentSettings.colorPresets : null);
+    if (presets) {
+      for (var pi = 0; pi < presets.length; pi++) {
+        var p = StyleKit.normalizePreset(presets[pi]);
+        if (usedColors.indexOf(normalizeColorHex(p.bgColor)) === -1) return p;
+      }
+    }
+    for (var si = 0; si < ALL_SPOT_COLORS.length; si++) {
+      if (usedColors.indexOf(ALL_SPOT_COLORS[si]) === -1) {
+        var st = StyleKit.getDefaultStyle(currentSettings);
+        st.bgColor = ALL_SPOT_COLORS[si];
+        return st;
+      }
+    }
+    var fb = StyleKit.getDefaultStyle(currentSettings);
+    fb.bgColor = ALL_SPOT_COLORS[Math.floor(Math.random() * ALL_SPOT_COLORS.length)];
+    return fb;
+  }
+
+  function highlightSelectedRange(text, style, spotId) {
     try {
       var sel = window.getSelection();
       if (!sel || sel.rangeCount === 0) return null;
@@ -913,11 +960,12 @@
       var ancNs = ancEl && ancEl.namespaceURI;
       if (ancNs && ancNs !== 'http://www.w3.org/1999/xhtml') return null;
       var wrapper = document.createElement('ah-spot');
-      // 跟随全局默认的文字样式，背景色仍用传入的随机色以便区分多个 spot
-      var spotStyle = StyleKit.getDefaultStyle(currentSettings);
-      spotStyle.bgColor = color;
-      StyleKit.applyToElement(wrapper, spotStyle, false);
+      // 整个预设样式（背景 + 文字含自动反色）直接应用到片段
+      StyleKit.applyToElement(wrapper, style, false);
       wrapper.style.padding = '1px 0';
+      // 每个片段在创建时就带上 spotId：跨父元素的多片段无法靠兄弟反查统一赋值，
+      // 否则删除时只能删掉同一父元素下的片段，其余残留
+      if (spotId) wrapper.dataset.ahSpotId = spotId;
       try { range.surroundContents(wrapper); sel.removeAllRanges(); return wrapper; } catch (e) {}
       var treeWalker = document.createTreeWalker(
         range.commonAncestorContainer,
@@ -986,6 +1034,14 @@
     for (var ui = 0; ui < els.length; ui++) {
       els[ui].style.backgroundColor = color;
       els[ui].style.cssText = 'background-color:' + color + ';padding:1px 0;border-radius:2px;';
+    }
+  }
+
+  function updateSpotStyle(spotId, style) {
+    var els = document.querySelectorAll('ah-spot[data-ah-spot-id="' + spotId + '"]');
+    for (var ui = 0; ui < els.length; ui++) {
+      StyleKit.applyToElement(els[ui], style, false);
+      els[ui].style.padding = '1px 0';
     }
   }
 

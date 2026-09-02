@@ -26,7 +26,7 @@
     .btn { padding: 6px 12px; border: 1px solid #d9d9d9; border-radius: 4px; background: #fff; cursor: pointer; font-size: 12px; color: #333; transition: all 0.15s; white-space: nowrap; }
     .btn:hover { border-color: #1890ff; color: #1890ff; }
     .btn-primary { background: #1890ff; color: #fff; border-color: #1890ff; }
-    .btn-primary:hover { background: #40a9ff; }
+    .btn-primary:hover { background: #40a9ff; color: #fff; }
     .btn-danger { color: #ff4d4f; border-color: #ff4d4f; }
     .btn-danger:hover { background: #fff1f0; }
     .btn-sm { padding: 3px 8px; font-size: 11px; }
@@ -85,6 +85,13 @@
     .se-chip.u { text-decoration: underline; }
     .se-chip.s { text-decoration: line-through; }
     .cpp-actions { display: flex; gap: 6px; justify-content: flex-end; margin-top: 12px; position: sticky; bottom: -12px; background: #fff; padding: 6px 0; box-shadow: 0 -4px 8px -6px rgba(0,0,0,0.25); }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; z-index: 1000000; }
+    .modal { background: #fff; border-radius: 10px; padding: 20px; width: 320px; box-shadow: 0 8px 32px rgba(0,0,0,0.15); }
+    .modal h3 { font-size: 14px; margin-bottom: 10px; }
+    .modal-tip { font-size: 12px; color: #999; margin-bottom: 8px; line-height: 1.5; }
+    .modal input[type="text"] { width: 100%; padding: 8px 10px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 13px; outline: none; box-sizing: border-box; }
+    .modal input[type="text"]:focus { border-color: #1890ff; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
     .manual-clear-badge { display: flex; align-items: center; justify-content: flex-end; padding: 6px 16px; background: #fffbe6; border-top: 1px dashed #ffe58f; }
     .empty-hint { padding: 12px 16px; font-size: 12px; color: #bbb; text-align: center; }
     .footer { padding: 10px 16px; display: flex; gap: 8px; align-items: center; justify-content: space-between; background: #fff; border-top: 1px solid #e8e8e8; flex-shrink: 0; }
