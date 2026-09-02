@@ -7,8 +7,9 @@ var Storage = {
 
   defaultSettings: {
     showRail: true,
-    defaultColor: '#ffeb3b',
-    colorPresets: ['#ffeb3b', '#ff6b6b', '#a8e6cf', '#ffd93d', '#6bcb77', '#4d96ff', '#c084fc', '#fb923c'],
+    stylePresets: [],
+    // 临时高亮的默认样式（popup 搜索区「自定义样式」配置，持久化记忆）
+    tempStyle: null,
     historyEnabled: true,
     tempHistory: [],
     defaultMatchType: 'contains',
@@ -87,12 +88,31 @@ var Storage = {
 
   async getSettings() {
     await this._checkFallback();
+    var stored;
     if (this._isLocal) {
       var localData = await chrome.storage.local.get(this.KEYS.SETTINGS);
-      return Object.assign({}, this.defaultSettings, localData[this.KEYS.SETTINGS] || {});
+      stored = localData[this.KEYS.SETTINGS] || {};
+    } else {
+      var data = await chrome.storage.sync.get(this.KEYS.SETTINGS);
+      stored = data[this.KEYS.SETTINGS] || {};
     }
-    var data = await chrome.storage.sync.get(this.KEYS.SETTINGS);
-    return Object.assign({}, this.defaultSettings, data[this.KEYS.SETTINGS] || {});
+    var s = Object.assign({}, this.defaultSettings, stored);
+    s.stylePresets = this._resolvePresets(stored);
+    return s;
+  },
+
+  /**
+   * 预设迁移：旧字段 colorPresets（hex 字符串数组）首次读取时转换为 stylePresets。
+   * 字段完全不存在（全新安装）时给一份出厂预设；显式存了空数组则保持空，
+   * 由 StyleKit.getDefaultStyle 回退到内置默认样式。
+   */
+  _resolvePresets(stored) {
+    if (typeof StyleKit === 'undefined') return [];
+    var list;
+    if (Array.isArray(stored.stylePresets)) list = stored.stylePresets;
+    else if (Array.isArray(stored.colorPresets)) list = stored.colorPresets;
+    else return StyleKit.getDefaultPresets();
+    return StyleKit.normalizePresets(list);
   },
 
   async saveSettings(settings) {
@@ -133,7 +153,8 @@ var Storage = {
     if (!rule) return null;
     keyword.id = this._uuid();
     keyword.enabled = true;
-    if (!keyword.color) keyword.color = '#ffeb3b';
+    // 样式字段一律不设默认值：缺省即「继承全局默认」（stylePresets[0]），
+    // 这样新增关键词会跟随全局样式的变化，而不是被创建时的默认值钉死。
     if (!keyword.matchType) keyword.matchType = 'contains';
     if (keyword.caseSensitive === undefined) keyword.caseSensitive = false;
     if (keyword.acrossElements === undefined) keyword.acrossElements = false;

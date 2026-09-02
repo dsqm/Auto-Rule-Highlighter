@@ -267,6 +267,8 @@
   function applyHighlight(rules, settings) {
     currentRules = rules;
     currentSettings = settings;
+    // 规则或设置刚变过，样式缓存必须失效，否则会拿旧样式渲染新配置
+    invalidateStyleMap();
     if (pageDisabled) return;
 
     var keywords = getActiveKeywords();
@@ -316,6 +318,8 @@
   }
 
   function _doReHighlight() {
+    // 临时关键词的增删改都走这里，kwId 可能复用而样式已变，缓存必须失效
+    invalidateStyleMap();
     var keywords = getActiveKeywords();
     if (keywords.length === 0) {
       var existingMarks = getAllHighlightMarks();
@@ -527,6 +531,8 @@
       var allMatches = [];
       for (var ki = 0; ki < keywords.length; ki++) {
         var kw = keywords[ki];
+        // 每个关键词只解析一次，同一关键词的所有 match 共享同一个样式对象
+        var kwStyle = StyleKit.resolveStyle(kw, currentSettings);
         try {
           var matches;
           if (kw.matchType === 'wildcard') {
@@ -548,7 +554,7 @@
           }
           for (var mi = 0; mi < matches.length; mi++) {
             matches[mi].keywordId = kw.id || '__temp__';
-            matches[mi].color = kw.color || currentSettings.defaultColor || '#ffeb3b';
+            matches[mi].kwStyle = kwStyle;
             matches[mi].keywordText = kw.text;
             matches[mi].showRail = kw.showRail !== false;
             matches[mi].exclusive = kw.exclusive === true;
@@ -708,18 +714,8 @@
 
       var isTempKw = match.keywordId && match.keywordId.indexOf('tmp_') === 0;
       var matchHide = match._hide !== undefined ? match._hide : (!isTempKw && exclusiveStopOrder >= 0 && match.globalOrder !== exclusiveStopOrder);
-      if (matchHide) {
-        mark.style.backgroundColor = 'transparent';
-        mark.style.color = 'inherit';
-        mark.style.padding = '0';
-        mark.style.borderRadius = '0';
-        mark.dataset.ahHidden = 'true';
-      } else {
-        mark.style.backgroundColor = match.color;
-        mark.style.color = getContrastColor(match.color);
-        mark.style.padding = '0';
-        mark.style.borderRadius = '2px';
-      }
+      StyleKit.applyToElement(mark, styleForMatch(match), matchHide);
+      mark.dataset.ahHidden = matchHide ? 'true' : '';
       fragment.appendChild(mark);
       if (afterText) fragment.appendChild(document.createTextNode(afterText));
       try { parent.replaceChild(fragment, node); } catch (e) {}
@@ -780,7 +776,11 @@
       var range = sel.getRangeAt(0);
       if (range.collapsed) return null;
       var wrapper = document.createElement('ah-spot');
-      wrapper.style.cssText = 'background-color:' + color + ';padding:1px 0;border-radius:2px;';
+      // 跟随全局默认的文字样式，背景色仍用传入的随机色以便区分多个 spot
+      var spotStyle = StyleKit.getDefaultStyle(currentSettings);
+      spotStyle.bgColor = color;
+      StyleKit.applyToElement(wrapper, spotStyle, false);
+      wrapper.style.padding = '1px 0';
       try { range.surroundContents(wrapper); sel.removeAllRanges(); return wrapper; } catch (e) {}
       var treeWalker = document.createTreeWalker(
         range.commonAncestorContainer,
@@ -882,7 +882,7 @@
       if (isHiddenByExclusive && !isManuallyShown) continue;
       if (h.dataset.ahHidden === 'true' && !isManuallyShown) continue;
       
-      if (!keywordMap[kwId]) keywordMap[kwId] = { text: h.dataset.ahKeywordText || '', color: h.style.backgroundColor, elements: [] };
+      if (!keywordMap[kwId]) keywordMap[kwId] = { text: h.dataset.ahKeywordText || '', color: getStyleForKeywordId(kwId).bgColor, elements: [] };
       keywordMap[kwId].elements.push(h);
     }
     cachedKeywordMap = keywordMap;
@@ -1003,11 +1003,13 @@
     var allMatches = [];
     for (var i = 0; i < keywords.length; i++) {
       var kw = keywords[i];
+      // 每个关键词只解析一次，同一关键词的所有 match 共享同一个样式对象
+      var kwStyle = StyleKit.resolveStyle(kw, currentSettings);
       try {
         var matches = Matcher.getMatches(text, kw.text, kw.matchType, kw.caseSensitive);
         for (var j = 0; j < matches.length; j++) {
           matches[j].keywordId = kw.id || '__temp__';
-          matches[j].color = kw.color || currentSettings.defaultColor || '#ffeb3b';
+          matches[j].kwStyle = kwStyle;
           matches[j].keywordText = kw.text;
           matches[j].showRail = kw.showRail !== false;
           matches[j].exclusive = kw.exclusive === true;
@@ -1054,18 +1056,10 @@
       highlightIndex++;
       if (highlightIndex > MAX_HIGHLIGHT_INDEX) highlightIndex = 0;
 
-      if (match._hide) {
-        mark.style.backgroundColor = 'transparent';
-        mark.style.color = 'inherit';
-        mark.style.padding = '0';
-        mark.style.borderRadius = '0';
-        mark.dataset.ahHidden = 'true';
-      } else {
-        mark.style.backgroundColor = match.color;
-        mark.style.color = getContrastColor(match.color);
-        mark.style.padding = '0';
-        mark.style.borderRadius = '2px';
-      }
+      // 隐藏态走 .ah-hidden class（content.css 里 !important 覆盖全部样式属性），
+      // 避免「隐藏后字号仍撑开行高」这类残留
+      StyleKit.applyToElement(mark, styleForMatch(match), match._hide);
+      mark.dataset.ahHidden = match._hide ? 'true' : '';
 
       fragment.appendChild(mark);
       lastEnd = match.end;
@@ -1074,13 +1068,41 @@
     try { parent.replaceChild(fragment, textNode); } catch (e) {}
   }
 
-  function getContrastColor(hexColor) {
-    if (!hexColor || hexColor.charAt(0) !== '#') return '#000000';
-    var hex = hexColor.replace('#', '');
-    if (hex.length < 6) return '#000000';
-    var r = parseInt(hex.substr(0, 2), 16), g = parseInt(hex.substr(2, 2), 16), b = parseInt(hex.substr(4, 2), 16);
-    if (isNaN(r) || isNaN(g) || isNaN(b)) return '#000000';
-    return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.5 ? '#000000' : '#ffffff';
+  // ---- 样式解析：统一走 utils/style.js，保证与 options / popup 的预览一致 ----
+
+  var styleMap = {};
+
+  function invalidateStyleMap() {
+    styleMap = {};
+  }
+
+  /** 按关键词 id 取解析后的完整样式（关键词覆写 + 全局默认），带缓存 */
+  function getStyleForKeywordId(kwId) {
+    if (styleMap[kwId]) return styleMap[kwId];
+    var s = StyleKit.resolveStyle(findKeywordById(kwId), currentSettings);
+    styleMap[kwId] = s;
+    return s;
+  }
+
+  function findKeywordById(kwId) {
+    for (var i = 0; i < currentRules.length; i++) {
+      var kws = currentRules[i] && currentRules[i].keywords;
+      if (!kws) continue;
+      for (var j = 0; j < kws.length; j++) {
+        if (kws[j].id === kwId) return kws[j];
+      }
+    }
+    for (var k = 0; k < tempKeywords.length; k++) {
+      if (tempKeywords[k].id === kwId) return tempKeywords[k];
+    }
+    return null;
+  }
+
+  /** 兜底：match 上没带样式对象时（跨元素匹配等边界路径）现算一次 */
+  function styleForMatch(match) {
+    if (match && match.kwStyle) return match.kwStyle;
+    if (match && match.keywordId) return getStyleForKeywordId(match.keywordId);
+    return StyleKit.getDefaultStyle(currentSettings);
   }
 
   function applyVisibility() {
@@ -1098,10 +1120,7 @@
 
       if (isManuallyHidden && !isManuallyShown) {
         if (m.dataset.ahHidden !== 'true') {
-          m.style.backgroundColor = 'transparent';
-          m.style.color = 'inherit';
-          m.style.padding = '0';
-          m.style.borderRadius = '0';
+          StyleKit.applyToElement(m, null, true);
           m.dataset.ahHidden = 'true';
           changed = true;
         }
@@ -1110,10 +1129,7 @@
 
       if (isHiddenByExclusive && !isManuallyShown) {
         if (m.dataset.ahHidden !== 'true') {
-          m.style.backgroundColor = 'transparent';
-          m.style.color = 'inherit';
-          m.style.padding = '0';
-          m.style.borderRadius = '0';
+          StyleKit.applyToElement(m, null, true);
           m.dataset.ahHidden = 'true';
           changed = true;
         }
@@ -1123,26 +1139,9 @@
       if (m.dataset.ahHidden === 'true' || isManuallyShown) {
         var wasHidden = m.dataset.ahHidden === 'true';
         m.dataset.ahHidden = '';
-        var color = currentSettings.defaultColor || '#ffeb3b';
-        for (var j = 0; j < currentRules.length; j++) {
-          if (!currentRules[j].keywords) continue;
-          for (var k = 0; k < currentRules[j].keywords.length; k++) {
-            if (currentRules[j].keywords[k].id === kwId) {
-              color = currentRules[j].keywords[k].color || color;
-              break;
-            }
-          }
-        }
-        for (var l = 0; l < tempKeywords.length; l++) {
-          if (tempKeywords[l].id === kwId) {
-            color = tempKeywords[l].color || color;
-            break;
-          }
-        }
-        m.style.backgroundColor = color;
-        m.style.color = getContrastColor(color);
-        m.style.padding = '0';
-        m.style.borderRadius = '2px';
+        // 走统一解析：取消隐藏时字号 / 字重 / 斜体 / 下划线会一并恢复，
+        // 不再像旧版那样只回填一个背景色
+        StyleKit.applyToElement(m, getStyleForKeywordId(kwId), false);
         if (wasHidden) changed = true;
       }
     }

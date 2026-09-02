@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnImport = document.getElementById('btnImport');
   const importFile = document.getElementById('importFile');
   const btnClearAll = document.getElementById('btnClearAll');
+  var currentSettings = {};
 
   function setupModalClose(overlay) {
     let mouseDownTarget = null;
@@ -19,7 +20,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function saveCurrentSettings() {
     var activeMt = document.querySelector('#settDefaultMatchTypeRow .match-type-btn.active');
-    await Storage.saveSettings({
+    // 合并读取再写入，避免整体覆盖把 popup 维护的 tempHistory 等字段冲掉
+    var current = await Storage.getSettings();
+    var next = Object.assign({}, current, {
       showRail: document.getElementById('settShowRail').checked,
       historyEnabled: document.getElementById('settHistoryEnabled').checked,
       contextMenuEnabled: document.getElementById('settContextMenuEnabled').checked,
@@ -31,12 +34,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       defaultMatchType: activeMt ? activeMt.dataset.matchType : 'contains',
       defaultCaseSensitive: document.getElementById('settDefaultCaseSensitive').classList.contains('active'),
       defaultAcrossElements: document.getElementById('settDefaultAcrossElements').classList.contains('active'),
-      colorPresets: colorPresets
+      stylePresets: stylePresets
     });
+    await Storage.saveSettings(next);
     updateStorageInfo();
+    // 全局默认样式（stylePresets[0]）变化需要通知所有页面重建高亮
+    chrome.runtime.sendMessage({ type: 'SETTINGS_CHANGED' }).catch(() => {});
   }
 
   const settings = await Storage.getSettings();
+  currentSettings = settings;
   document.getElementById('settShowRail').checked = settings.showRail !== false;
   document.getElementById('settHistoryEnabled').checked = settings.historyEnabled !== false;
 
@@ -59,13 +66,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('settDefaultCaseSensitive').classList.toggle('active', defCaseSensitive);
   document.getElementById('settDefaultAcrossElements').classList.toggle('active', defAcrossElements);
 
-  let colorPresets = Array.isArray(settings.colorPresets) ? settings.colorPresets.slice() : Storage.defaultSettings.colorPresets.slice();
+  // 预设列表：Storage.getSettings 已做旧格式迁移，这里再 normalize 以兼容直接导入的旧数据
+  let stylePresets = StyleKit.normalizePresets(settings.stylePresets || settings.colorPresets);
 
   const colorPresetsContainer = document.getElementById('colorPresetsContainer');
   const btnAddPreset = document.getElementById('btnAddPreset');
   const btnResetPresets = document.getElementById('btnResetPresets');
 
-  renderColorPresets();
+  renderStylePresets();
 
   async function updateStorageInfo() {
     try {
@@ -110,73 +118,123 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.querySelectorAll('.confirm-popup').forEach(function(p) { p.remove(); });
   }
 
-  function openColorEditor(oldColor, callback) {
-    var input = document.createElement('input');
-    input.type = 'color';
-    input.style.position = 'absolute';
-    input.style.opacity = '0';
-    input.style.pointerEvents = 'none';
-    document.body.appendChild(input);
-    input.value = oldColor;
-    input.click();
-    input.addEventListener('change', function() {
-      callback(input.value);
-      input.remove();
-    });
-    input.addEventListener('blur', function() { setTimeout(function() { if (input.parentNode) input.remove(); }, 200); });
-  }
+  // ---- 统一样式编辑器（与临时高亮同一套，带开关），实现在 utils/style-editor.js ----
+  var mountStyleEditor = StyleEditor.mountStyleEditor;
 
-  function renderColorPresets() {
+  // ---- 样式预设管理（设置页） ----
+
+  function renderStylePresets() {
     colorPresetsContainer.innerHTML = '';
-    for (let i = 0; i < colorPresets.length; i++) {
-      const c = colorPresets[i];
-      const block = document.createElement('span');
-      block.className = 'preset-color-block';
-      block.style.backgroundColor = c;
-      block.title = c + ' — 点击修改颜色';
-      const del = document.createElement('span');
-      del.className = 'preset-del';
-      del.textContent = '×';
-      del.title = '删除';
-      block.appendChild(del);
-      block.addEventListener('click', function(e) {
+    var dragIndex = null;
+    stylePresets.forEach(function (p, i) {
+      const block = document.createElement('div');
+      block.className = 'style-preset-block' + (i === 0 ? ' is-default' : '');
+      block.draggable = true;
+      const preview = document.createElement('span');
+      StyleKit.renderPresetDot(preview, p, 30);
+      block.appendChild(preview);
+      if (i === 0) {
+        const badge = document.createElement('span');
+        badge.className = 'style-preset-badge';
+        badge.textContent = '默认';
+        block.appendChild(badge);
+      }
+      const editBtn = document.createElement('span');
+      editBtn.className = 'preset-edit';
+      editBtn.textContent = '✎';
+      editBtn.title = '编辑样式';
+      const delBtn = document.createElement('span');
+      delBtn.className = 'preset-del';
+      delBtn.textContent = '×';
+      delBtn.title = '删除';
+      block.appendChild(editBtn);
+      block.appendChild(delBtn);
+
+      block.addEventListener('click', function (e) {
         e.stopPropagation();
-        if (e.target === del) {
-          var rect = del.getBoundingClientRect();
-          showConfirmPopup(rect.left - 60, rect.bottom + 4, function() {
-            colorPresets.splice(i, 1);
-            renderColorPresets();
+        if (e.target === delBtn) {
+          var rect = delBtn.getBoundingClientRect();
+          showConfirmPopup(rect.left - 60, rect.bottom + 4, function () {
+            if (stylePresets.length <= 1) { showToast('至少保留一个样式预设'); return; }
+            stylePresets.splice(i, 1);
+            renderStylePresets();
             saveCurrentSettings();
           });
           return;
         }
-        openColorEditor(c, function(newColor) {
-          colorPresets[i] = newColor;
-          renderColorPresets();
-          saveCurrentSettings();
-        });
+        if (e.target === editBtn) { openStylePresetEditor(i); return; }
+        openStylePresetEditor(i);
       });
+
+      block.addEventListener('dragstart', function () { dragIndex = i; block.classList.add('dragging'); });
+      block.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        if (dragIndex === null || dragIndex === i) return;
+        block.classList.add('drag-over');
+      });
+      block.addEventListener('dragleave', function () { block.classList.remove('drag-over'); });
+      block.addEventListener('drop', function (e) {
+        e.preventDefault();
+        block.classList.remove('drag-over');
+        if (dragIndex === null || dragIndex === i) return;
+        var from = dragIndex, to = i;
+        dragIndex = null;
+        var item = stylePresets.splice(from, 1)[0];
+        stylePresets.splice(to, 0, item);
+        renderStylePresets();
+        saveCurrentSettings();
+      });
+      block.addEventListener('dragend', function () {
+        block.classList.remove('dragging');
+        dragIndex = null;
+      });
+
       colorPresetsContainer.appendChild(block);
-    }
+    });
   }
 
-  btnAddPreset.addEventListener('click', function() {
-    if (colorPresets.length >= 20) { showToast('最多支持 20 个颜色预设'); return; }
-    openColorEditor('#ffeb3b', function(newColor) {
-      if (colorPresets.indexOf(newColor) < 0) {
-        colorPresets.push(newColor);
-        renderColorPresets();
-        saveCurrentSettings();
-      }
+  function openStylePresetEditor(index) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.style.zIndex = '400';
+    overlay.innerHTML = `
+      <div class="modal" style="width:420px;">
+        <h3>编辑样式预设</h3>
+        <div id="presetEditorBody"></div>
+        <div class="modal-actions">
+          <button class="btn" id="presetEditCancel">取消</button>
+          <button class="btn btn-primary" id="presetEditSave">保存</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    setupModalClose(overlay);
+    var editor = mountStyleEditor(overlay.querySelector('#presetEditorBody'), stylePresets[index]);
+    overlay.querySelector('#presetEditCancel').addEventListener('click', function () { overlay.remove(); });
+    overlay.querySelector('#presetEditSave').addEventListener('click', function () {
+      var saved = editor.read();
+      saved.id = stylePresets[index].id || saved.id;
+      stylePresets[index] = saved;
+      renderStylePresets();
+      saveCurrentSettings();
+      overlay.remove();
+      showToast('样式预设已保存');
     });
+  }
+
+  btnAddPreset.addEventListener('click', function () {
+    if (stylePresets.length >= 12) { showToast('最多支持 12 个样式预设'); return; }
+    // 新预设从全局默认复制一份，用户在此基础上改
+    stylePresets.push(StyleKit.cloneStyle(stylePresets[0]));
+    renderStylePresets();
+    openStylePresetEditor(stylePresets.length - 1);
   });
 
-  btnResetPresets.addEventListener('click', function() {
-    if (confirm('确定恢复默认颜色预设？当前预设将被替换。')) {
-      colorPresets = Storage.defaultSettings.colorPresets.slice();
-      renderColorPresets();
+  btnResetPresets.addEventListener('click', function () {
+    if (confirm('确定恢复默认样式预设？当前预设将被替换。')) {
+      stylePresets = StyleKit.getDefaultPresets();
+      renderStylePresets();
       saveCurrentSettings();
-      showToast('颜色预设已恢复默认');
+      showToast('样式预设已恢复默认');
     }
   });
 
@@ -284,6 +342,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   function escapeHtml(str) {
     if (!str) return '';
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  /** 关键词行的预览块在模板串里只是占位符（带 data-style），插入 DOM 后统一渲染 */
+  function hydrateKwPreviews(container) {
+    var els = container.querySelectorAll('.kw-preview[data-style]');
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      var parsed;
+      try { parsed = JSON.parse(el.dataset.style); } catch (e) { parsed = null; }
+      if (parsed) StyleKit.renderPreview(el, StyleKit.makeStyle(parsed), 26, 18);
+    }
   }
 
   function getMatchTypeLabel(type) {
@@ -456,8 +525,9 @@ document.addEventListener('DOMContentLoaded', async () => {
               <option value="regex">正则</option>
               <option value="wildcard">通配</option>
             </select>
-            <input type="color" id="kwColor" value="#ffeb3b" style="width:36px;height:30px;padding:1px;cursor:pointer;border:1px solid #d9d9d9;border-radius:4px;">
+            <span id="kwStylePreview" title="当前样式，点击编辑" style="cursor:pointer;"></span>
             <div id="kwPresetsRow" style="display:flex;gap:4px;align-items:center;"></div>
+            <button class="btn btn-sm" id="kwStyleBtn" type="button" title="自定义样式：背景色 / 文字颜色 / 字号 / 字形">自定义样式</button>
             <button class="toggle-opt-btn" id="kwCaseSensitive" title="区分大小写" type="button">Aa</button>
             <button class="toggle-opt-btn across" id="kwAcrossElements" title="跨元素匹配" type="button">↔</button>
             <label style="font-size:11px;display:flex;align-items:center;gap:2px;white-space:nowrap;"><input type="checkbox" id="kwShowRail" checked> 右边栏</label>
@@ -511,7 +581,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             <span class="drag-handle" data-drag="kw" title="拖动排序" draggable="true">☰</span>
             <button class="kw-move-btn" data-kw-move-up="${idx}" ${idx === 0 ? 'disabled' : ''} title="上移">▲</button>
             <button class="kw-move-btn" data-kw-move-down="${idx}" ${idx === keywords.length - 1 ? 'disabled' : ''} title="下移">▼</button>
-            <span style="width:10px;height:10px;border-radius:50%;background:${kw.color || '#ffeb3b'};flex-shrink:0;"></span>
+            <span class="kw-preview" data-style="${escapeHtml(JSON.stringify(StyleKit.resolveStyle(kw, currentSettings)))}"></span>
             <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(kw.text)}">${escapeHtml(kw.name || kw.text)}</span>
             <span style="font-size:10px;color:#999;background:#f5f5f5;padding:1px 5px;border-radius:3px;">${getMatchTypeLabel(kw.matchType)}</span>
             ${kw.caseSensitive ? '<span style="font-size:10px;color:#fa8c16;font-weight:600;">Aa</span>' : ''}
@@ -527,32 +597,70 @@ document.addEventListener('DOMContentLoaded', async () => {
           </div>
         `).join('');
 
+        hydrateKwPreviews(container);
         setupKwDragDrop(overlay, ruleId);
       });
     }
 
     renderKeywordList();
 
+    // 新增关键词的样式状态：预设单击套用 / 自定义按钮打开编辑弹窗
+    var newKwStyle = {};
+
+    /** 最左侧的当前样式预览（点击 = 编辑） */
+    function renderKwPreview() {
+      var pv = overlay.querySelector('#kwStylePreview');
+      if (pv) StyleKit.renderPreview(pv, StyleKit.resolveStyle(newKwStyle, currentSettings), 28, 28);
+    }
+
     function renderKwPresets() {
       var row = overlay.querySelector('#kwPresetsRow');
       if (!row) return;
       row.innerHTML = '';
-      var presets = colorPresets;
-      for (var pi = 0; pi < presets.length; pi++) {
-        (function(pc) {
-          var dot = document.createElement('span');
-          dot.className = 'kw-preset-dot';
-          dot.style.backgroundColor = pc;
-          dot.title = pc;
-          dot.addEventListener('click', function() {
-            var colorInput = overlay.querySelector('#kwColor');
-            if (colorInput) colorInput.value = pc;
-          });
-          row.appendChild(dot);
-        })(presets[pi]);
-      }
+      stylePresets.forEach(function (p) {
+        var dot = document.createElement('span');
+        dot.className = 'kw-preset-dot' + (StyleKit.styleEquals(p, newKwStyle) ? ' selected' : '');
+        StyleKit.renderPresetDot(dot, p, 18);
+        dot.title = '套用此样式';
+        dot.addEventListener('click', function () {
+          newKwStyle = StyleKit.cloneStyle(p);
+          renderKwPresets();
+          renderKwPreview();
+        });
+        row.appendChild(dot);
+      });
+      renderKwPreview();
     }
     renderKwPresets();
+
+    // 自定义样式：与临时高亮同款交互 —— 弹窗内编辑完整样式
+    function openNewKwStyleModal() {
+      const overlay2 = document.createElement('div');
+      overlay2.className = 'modal-overlay';
+      overlay2.style.zIndex = '300';
+      overlay2.innerHTML = `
+        <div class="modal" style="width:420px;">
+          <h3>自定义关键词样式</h3>
+          <div id="newKwStyleBody"></div>
+          <div class="modal-actions">
+            <button class="btn" id="newKwStyleCancel">取消</button>
+            <button class="btn btn-primary" id="newKwStyleSave">确定</button>
+          </div>
+        </div>`;
+      document.body.appendChild(overlay2);
+      setupModalClose(overlay2);
+      var ed = mountStyleEditor(overlay2.querySelector('#newKwStyleBody'), StyleKit.resolveStyle(newKwStyle, currentSettings));
+      overlay2.querySelector('#newKwStyleCancel').addEventListener('click', function () { overlay2.remove(); });
+      overlay2.querySelector('#newKwStyleSave').addEventListener('click', function () {
+        newKwStyle = ed.read();
+        renderKwPresets();
+        overlay2.remove();
+      });
+    }
+
+    overlay.querySelector('#kwStyleBtn').addEventListener('click', openNewKwStyleModal);
+    var kwPreviewEl = overlay.querySelector('#kwStylePreview');
+    if (kwPreviewEl) kwPreviewEl.addEventListener('click', openNewKwStyleModal);
 
     const kwTextEl = overlay.querySelector('#kwText');
     const kwAddBtn = overlay.querySelector('#kwAddBtn');
@@ -565,7 +673,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         text: text,
         name: nameVal || '',
         matchType: overlay.querySelector('#kwMatchType').value,
-        color: overlay.querySelector('#kwColor').value,
+        color: newKwStyle.bgColor,
+        textColor: newKwStyle.textColor,
+        fontSize: newKwStyle.fontSize,
+        bold: newKwStyle.bold,
+        italic: newKwStyle.italic,
+        underline: newKwStyle.underline,
         caseSensitive: overlay.querySelector('#kwCaseSensitive').classList.contains('active'),
         acrossElements: overlay.querySelector('#kwAcrossElements').classList.contains('active'),
         showRail: overlay.querySelector('#kwShowRail').checked,
@@ -573,6 +686,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
       kwTextEl.value = '';
       overlay.querySelector('#kwName').value = '';
+      // 添加后样式复位到全局默认，避免连续添加时沿用上一次的样式
+      newKwStyle = {};
+      renderKwPresets();
       notifyRulesChanged();
       renderKeywordList();
     }
@@ -644,10 +760,11 @@ document.addEventListener('DOMContentLoaded', async () => {
           </select>
         </div>
         <div class="form-group">
-          <label>高亮颜色</label>
+          <label>样式</label>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-            <input type="color" class="color-input" id="editKwColor" value="${kw.color || '#ffeb3b'}">
-            <div id="editKwColorPresets" style="display:flex;gap:4px;flex-wrap:wrap;"></div>
+            <span id="editKwStylePreview" title="当前样式，点击编辑" style="cursor:pointer;"></span>
+            <div id="editKwPresets" style="display:flex;gap:4px;flex-wrap:wrap;"></div>
+            <button class="btn btn-sm" id="editKwStyleBtn" type="button" title="自定义样式：背景色 / 文字颜色 / 字号 / 字形">自定义样式</button>
           </div>
         </div>
         <div class="form-group">
@@ -685,22 +802,62 @@ document.addEventListener('DOMContentLoaded', async () => {
     overlay.querySelector('#editKwCaseSensitive').classList.toggle('active', kw.caseSensitive === true);
     overlay.querySelector('#editKwAcrossElements').classList.toggle('active', kw.acrossElements === true);
 
-    var editPresetsContainer = overlay.querySelector('#editKwColorPresets');
-    if (editPresetsContainer) {
-      for (var epi = 0; epi < colorPresets.length; epi++) {
-        (function(pc) {
-          var dot = document.createElement('span');
-          dot.className = 'kw-preset-dot';
-          dot.style.backgroundColor = pc;
-          dot.title = pc;
-          dot.addEventListener('click', function() {
-            var colorInput = overlay.querySelector('#editKwColor');
-            if (colorInput) colorInput.value = pc;
-          });
-          editPresetsContainer.appendChild(dot);
-        })(colorPresets[epi]);
-      }
+    // 编辑态样式：初始值 = 关键词覆写后的完整样式（继承关系在此解析）
+    var editStyle = StyleKit.resolveStyle(kw, currentSettings);
+
+    /** 最左侧的当前样式预览（点击 = 编辑） */
+    function renderEditPreview() {
+      var pv = overlay.querySelector('#editKwStylePreview');
+      if (pv) StyleKit.renderPreview(pv, editStyle, 28, 28);
     }
+
+    function renderEditPresets() {
+      var container = overlay.querySelector('#editKwPresets');
+      if (!container) return;
+      container.innerHTML = '';
+      stylePresets.forEach(function (p) {
+        var dot = document.createElement('span');
+        dot.className = 'kw-preset-dot' + (StyleKit.styleEquals(p, editStyle) ? ' selected' : '');
+        StyleKit.renderPresetDot(dot, p, 18);
+        dot.title = '套用此样式';
+        dot.addEventListener('click', function () {
+          editStyle = StyleKit.cloneStyle(p);
+          renderEditPresets();
+          renderEditPreview();
+        });
+        container.appendChild(dot);
+      });
+      renderEditPreview();
+    }
+    renderEditPresets();
+
+    // 自定义样式：弹窗编辑完整样式（与新增/临时高亮同一套编辑器）
+    function openEditStyleModal() {
+      const overlay2 = document.createElement('div');
+      overlay2.className = 'modal-overlay';
+      overlay2.style.zIndex = '300';
+      overlay2.innerHTML = `
+        <div class="modal" style="width:420px;">
+          <h3>自定义关键词样式</h3>
+          <div id="editKwStyleBody"></div>
+          <div class="modal-actions">
+            <button class="btn" id="editStyleCancel">取消</button>
+            <button class="btn btn-primary" id="editStyleSave">确定</button>
+          </div>
+        </div>`;
+      document.body.appendChild(overlay2);
+      setupModalClose(overlay2);
+      var ed = mountStyleEditor(overlay2.querySelector('#editKwStyleBody'), editStyle);
+      overlay2.querySelector('#editStyleCancel').addEventListener('click', function () { overlay2.remove(); });
+      overlay2.querySelector('#editStyleSave').addEventListener('click', function () {
+        editStyle = ed.read();
+        renderEditPresets();
+        overlay2.remove();
+      });
+    }
+    overlay.querySelector('#editKwStyleBtn').addEventListener('click', openEditStyleModal);
+    var editPreviewEl = overlay.querySelector('#editKwStylePreview');
+    if (editPreviewEl) editPreviewEl.addEventListener('click', openEditStyleModal);
 
     overlay.querySelector('#editKwCaseSensitive').addEventListener('click', function (e) {
       e.stopPropagation();
@@ -717,7 +874,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         name: overlay.querySelector('#editKwName').value.trim(),
         text: overlay.querySelector('#editKwText').value.trim(),
         matchType: overlay.querySelector('#editKwMatchType').value,
-        color: overlay.querySelector('#editKwColor').value,
+        color: editStyle.bgColor,
+        textColor: editStyle.textColor,
+        fontSize: editStyle.fontSize,
+        bold: editStyle.bold,
+        italic: editStyle.italic,
+        underline: editStyle.underline,
         caseSensitive: overlay.querySelector('#editKwCaseSensitive').classList.contains('active'),
         acrossElements: overlay.querySelector('#editKwAcrossElements').classList.contains('active'),
         showRail: overlay.querySelector('#editKwShowRail').checked,
@@ -822,7 +984,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             <span class="drag-handle" data-drag="kw" title="拖动排序" draggable="true">☰</span>
             <button class="kw-move-btn" data-kw-move-up="${idx}" ${idx === 0 ? 'disabled' : ''} title="上移">▲</button>
             <button class="kw-move-btn" data-kw-move-down="${idx}" ${idx === keywords.length - 1 ? 'disabled' : ''} title="下移">▼</button>
-            <span style="width:10px;height:10px;border-radius:50%;background:${kw.color || '#ffeb3b'};flex-shrink:0;"></span>
+            <span class="kw-preview" data-style="${escapeHtml(JSON.stringify(StyleKit.resolveStyle(kw, currentSettings)))}"></span>
             <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(kw.text)}">${escapeHtml(kw.name || kw.text)}</span>
             <span style="font-size:10px;color:#999;background:#f5f5f5;padding:1px 5px;border-radius:3px;">${getMatchTypeLabel(kw.matchType)}</span>
             ${kw.caseSensitive ? '<span style="font-size:10px;color:#fa8c16;font-weight:600;">Aa</span>' : ''}
@@ -838,6 +1000,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           </div>
         `).join('');
         container.innerHTML = freshKeywords;
+        hydrateKwPreviews(container);
         setupKwDragDrop(overlay, ruleId);
       }
     }

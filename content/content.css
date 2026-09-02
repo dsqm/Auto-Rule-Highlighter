@@ -3,6 +3,20 @@ ah-mark {
   contain: layout style paint;
 }
 
+/* 隐藏态（独占高亮 / 手动隐藏）：必须把 StyleKit 写入的每个属性都还原，
+   否则残留的 font-size / font-weight 仍会撑开行高、破坏页面布局。
+   内联 style 优先级高于选择器，所以这里必须用 !important 才能覆盖。 */
+ah-mark.ah-hidden {
+  background-color: transparent !important;
+  color: inherit !important;
+  font-size: inherit !important;
+  font-weight: inherit !important;
+  font-style: inherit !important;
+  text-decoration: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+}
+
 @keyframes ah-blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }

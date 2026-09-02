@@ -66,11 +66,41 @@
     .preset-color-block:hover { transform: scale(1.15); border-color: #1890ff; }
     .preset-color-block .preset-del { position: absolute; top: -5px; right: -5px; width: 14px; height: 14px; border-radius: 50%; background: #ff4d4f; color: #fff; font-size: 9px; line-height: 14px; text-align: center; cursor: pointer; display: none; }
     .preset-color-block:hover .preset-del { display: block; }
+
+    .style-preset-block { width: 44px; height: 30px; position: relative; cursor: pointer; border: 2px solid transparent; border-radius: 6px; transition: transform 0.15s, border-color 0.15s; display: flex; align-items: center; justify-content: center; padding: 2px; box-sizing: content-box; }
+    .style-preset-block:hover { border-color: #1890ff; }
+    .style-preset-block.dragging { opacity: 0.4; }
+    .style-preset-block.drag-over { border-left: 3px solid #1890ff; }
+    .style-preset-block .preset-del, .style-preset-block .preset-edit { position: absolute; width: 16px; height: 16px; border-radius: 50%; color: #fff; font-size: 10px; line-height: 16px; text-align: center; cursor: pointer; display: none; z-index: 3; }
+    .style-preset-block .preset-del { top: -7px; right: -7px; background: #ff4d4f; }
+    .style-preset-block .preset-edit { top: -7px; left: -7px; background: #1890ff; }
+    .style-preset-block:hover .preset-del, .style-preset-block:hover .preset-edit { display: block; }
+    .style-preset-badge { position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); font-size: 9px; background: #1890ff; color: #fff; border-radius: 3px; padding: 0 3px; white-space: nowrap; z-index: 3; line-height: 1.5; }
+    .kw-preview { flex-shrink: 0; vertical-align: middle; }
+    .se-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+    .se-row:last-child { margin-bottom: 0; }
+    .se-label { width: 32px; font-size: 12px; color: #999; flex-shrink: 0; }
+    .se-toggle { flex-shrink: 0; width: auto; margin: 0; }
+    .se-row input[type="color"] { width: 24px; height: 24px; padding: 0; border: 1px solid #d9d9d9; border-radius: 3px; cursor: pointer; flex-shrink: 0; background: none; }
+    .se-row input[type="color"]:disabled { opacity: 0.3; cursor: not-allowed; }
+    .se-row input[type="text"] { flex: 1; min-width: 0; padding: 3px 6px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 12px; outline: none; font-family: monospace; }
+    .se-row input[type="text"]:focus { border-color: #1890ff; }
+    .se-row select { flex: 1; min-width: 0; padding: 3px 6px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 12px; outline: none; background: #fff; }
+    .se-row select:disabled, .se-row input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
+    .se-row input[type="range"] { flex: 1; min-width: 0; }
+    .se-fs-val { width: 34px; text-align: right; font-size: 12px; color: #666; flex-shrink: 0; }
+    .se-chip { min-width: 26px; height: 22px; border: 1px solid #d9d9d9; border-radius: 4px; background: #fff; cursor: pointer; font-size: 12px; color: #666; line-height: 1; }
+    .se-chip:hover { border-color: #1890ff; }
+    .se-chip.on { background: #e6f7ff; color: #1890ff; border-color: #91d5ff; }
+    .se-chip.b { font-weight: 700; }
+    .se-chip.i { font-style: italic; }
+    .se-chip.u { text-decoration: underline; }
     .confirm-popup { position: fixed; background: #fff; border-radius: 8px; padding: 16px 20px; box-shadow: 0 6px 24px rgba(0,0,0,0.2); z-index: 300; font-size: 13px; text-align: center; }
     .confirm-popup p { margin-bottom: 12px; color: #333; }
     .confirm-popup .confirm-actions { display: flex; gap: 8px; justify-content: center; }
     .kw-preset-dot { width: 16px; height: 16px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; flex-shrink: 0; transition: transform 0.15s; }
     .kw-preset-dot:hover { transform: scale(1.2); border-color: #1890ff; }
+    .kw-preset-dot.selected { box-shadow: 0 0 0 2px #1890ff; }
 
     .match-type-btn { font-size: 11px; padding: 3px 8px; border: 1px solid #d9d9d9; border-radius: 3px; background: #fafafa; color: #666; cursor: pointer; transition: all 0.15s; }
     .match-type-btn:hover { border-color: #1890ff; color: #1890ff; }
@@ -150,14 +180,14 @@
         </div>
       </div>
       <div class="settings-row">
-        <label>颜色预设</label>
+        <label>样式预设</label>
         <div class="field">
-          <div id="colorPresetsContainer" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;"></div>
-          <div style="display:flex;gap:6px;margin-top:6px;align-items:center;">
+          <div id="colorPresetsContainer" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"></div>
+          <div style="display:flex;gap:6px;margin-top:8px;align-items:center;">
             <button class="btn btn-sm" id="btnAddPreset">+ 添加预设</button>
-            <button class="btn btn-sm" id="btnResetPresets" title="恢复默认颜色">重置默认</button>
+            <button class="btn btn-sm" id="btnResetPresets" title="恢复默认样式预设">重置默认</button>
           </div>
-          <span style="font-size:11px;color:#999;margin-top:4px;display:block;">点击颜色可修改，点击 × 删除。预设颜色用于临时高亮和规则关键词快速选择</span>
+          <span style="font-size:11px;color:#999;margin-top:4px;display:block;">拖动可排序，第一项为全局默认样式（新建关键词时套用）。点击预设编辑，点击 × 删除</span>
         </div>
       </div>
       <div class="settings-row">
@@ -190,6 +220,8 @@
 
   <script src="../utils/matcher.js"></script>
   <script src="../utils/storage.js"></script>
+  <script src="../utils/style.js"></script>
+  <script src="../utils/style-editor.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

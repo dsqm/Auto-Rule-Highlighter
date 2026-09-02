@@ -14,7 +14,6 @@ document.addEventListener('DOMContentLoaded', function () {
   var btnHistory = document.getElementById('btnHistory');
   var historyDropdown = document.getElementById('historyDropdown');
   var searchColorPresets = document.getElementById('searchColorPresets');
-  var searchCustomColor = document.getElementById('searchCustomColor');
   var spotSection = document.getElementById('spotSection');
   var spotList = document.getElementById('spotList');
   var spotCountEl = document.getElementById('spotCount');
@@ -32,8 +31,9 @@ document.addEventListener('DOMContentLoaded', function () {
   var kwOrders = {};
   var kwExclusive = {};
   var pageDisabled = false;
-  var colorPresets = [];
-  var selectedTempColor = '#ffeb3b';
+  var stylePresets = [];
+  var selectedTempStyle = null;
+  var currentSettings = {};
   var selectedMatchType = 'contains';
   var caseSensitive = false;
   var acrossElements = false;
@@ -44,18 +44,35 @@ document.addEventListener('DOMContentLoaded', function () {
   var navIndexMap = {};
   var cppTarget = null;
   var cppPopup = null;
-  var cppPresets = null;
-  var cppColorInput = null;
-  var cppHexInput = null;
+  var cppStyleBody = null;
+  var cppStyleEditor = null;
   var cppCancel = null;
   var cppApply = null;
 
   cppPopup = document.getElementById('colorPickerPopup');
-  cppPresets = document.getElementById('cppPresets');
-  cppColorInput = document.getElementById('cppColorInput');
-  cppHexInput = document.getElementById('cppHexInput');
+  cppStyleBody = document.getElementById('cppStyleBody');
   cppCancel = document.getElementById('cppCancel');
   cppApply = document.getElementById('cppApply');
+
+  /** 模板串里只能放占位符，插入 DOM 后再用 StyleKit 渲染，保证三端预览规则一致 */
+  function previewPlaceholder(style, action, idAttr, extraAttrs) {
+    var json = escapeHtml(JSON.stringify(StyleKit.makeStyle(style)));
+    return '<span class="kw-preview" data-style="' + json + '"' +
+      (action ? ' data-action="' + action + '"' : '') +
+      (idAttr ? ' ' + idAttr : '') +
+      (extraAttrs || '') +
+      ' title="点击修改样式"></span>';
+  }
+
+  function hydratePreviews(container) {
+    var els = container.querySelectorAll('.kw-preview[data-style]');
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      var parsed;
+      try { parsed = JSON.parse(el.dataset.style); } catch (e) { parsed = null; }
+      if (parsed) StyleKit.renderPreview(el, StyleKit.makeStyle(parsed), 28, 20);
+    }
+  }
 
   function escapeHtml(str) {
     if (!str) return '';
@@ -109,28 +126,57 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  function renderSearchColorPresets() {
-    searchColorPresets.innerHTML = '';
-    for (var i = 0; i < colorPresets.length; i++) {
-      var c = colorPresets[i];
-      var dot = document.createElement('span');
-      dot.className = 'preset-dot' + (c === selectedTempColor ? ' selected' : '');
-      dot.style.background = c;
-      dot.title = c;
-      dot.addEventListener('click', (function (color) {
-        return function () {
-          selectedTempColor = color;
-          searchCustomColor.value = color;
-          renderSearchColorPresets();
-        };
-      })(c));
-      searchColorPresets.appendChild(dot);
+  /** 当前临时样式预览：自定义后一眼可见「正在用自定义样式」 */
+  function renderSearchPreview() {
+    if (searchStylePreview) {
+      StyleKit.renderPreview(searchStylePreview, StyleKit.resolveStyle(selectedTempStyle, currentSettings), 28, 28);
     }
   }
 
-  searchCustomColor.addEventListener('change', function () {
-    selectedTempColor = searchCustomColor.value;
-    renderSearchColorPresets();
+  function renderSearchColorPresets() {
+    searchColorPresets.innerHTML = '';
+    for (var i = 0; i < stylePresets.length; i++) {
+      var p = stylePresets[i];
+      var block = document.createElement('span');
+      block.className = 'preset-dot' + (StyleKit.styleEquals(p, selectedTempStyle) ? ' selected' : '');
+      StyleKit.renderPresetDot(block, p, 18);
+      block.title = '套用此样式';
+      block.addEventListener('click', (function (preset) {
+        return function () {
+          selectedTempStyle = StyleKit.keywordOverrides(preset);
+          persistTempStyle();
+          renderSearchColorPresets();
+          renderSearchPreview();
+        };
+      })(p));
+      searchColorPresets.appendChild(block);
+    }
+    renderSearchPreview();
+  }
+
+  // 点当前样式预览 = 打开自定义弹窗
+  var searchStylePreview = document.getElementById('searchStylePreview');
+  if (searchStylePreview) {
+    searchStylePreview.style.cursor = 'pointer';
+    searchStylePreview.addEventListener('click', function () {
+      cppTarget = { isTempStyle: true };
+      openStylePanel(selectedTempStyle, searchStylePreview);
+    });
+  }
+
+  /** 把当前临时高亮默认样式持久化（只存有显式值的字段，undefined 字段不落盘），下次打开弹窗仍是它 */
+  function persistTempStyle() {
+    Storage.getSettings().then(function (s) {
+      s.tempStyle = StyleKit.keywordOverrides(selectedTempStyle);
+      return Storage.saveSettings(s);
+    }).catch(function () {});
+  }
+
+  // 搜索区「自定义样式」：打开完整样式浮层（背景色/文字色/字号/字形），应用到临时高亮
+  var searchStyleBtn = document.getElementById('searchStyleBtn');
+  searchStyleBtn.addEventListener('click', function () {
+    cppTarget = { isTempStyle: true };
+    openStylePanel(selectedTempStyle, searchStyleBtn);
   });
 
   var scsBtn = document.getElementById('searchCaseSensitive');
@@ -164,11 +210,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
   Storage.getSettings().then(function (settings) {
     railToggle.checked = settings.showRail !== false;
-    colorPresets = Array.isArray(settings.colorPresets) && settings.colorPresets.length > 0
-      ? settings.colorPresets.slice()
-      : Storage.defaultSettings.colorPresets.slice();
-    selectedTempColor = colorPresets[0] || '#ffeb3b';
-    searchCustomColor.value = selectedTempColor;
+    currentSettings = settings;
+    // Storage.getSettings 已做过迁移，这里再 normalize 一次以兼容直接导入的旧数据
+    stylePresets = StyleKit.normalizePresets(settings.stylePresets || settings.colorPresets);
+    // 临时高亮默认样式优先读记忆值；从未设置过则取全局默认（预设第一项）
+    selectedTempStyle = settings.tempStyle
+      ? StyleKit.keywordOverrides(settings.tempStyle)
+      : StyleKit.keywordOverrides(stylePresets[0] || StyleKit.getDefaultStyle(settings));
     renderSearchColorPresets();
     historyEnabled = settings.historyEnabled !== false;
     tempHistory = Array.isArray(settings.tempHistory) ? settings.tempHistory.slice() : [];
@@ -256,6 +304,10 @@ document.addEventListener('DOMContentLoaded', function () {
     renderTempSection();
     renderSpotSection();
     renderRuleSection();
+    // 预览块在模板串里只是占位符，插入 DOM 后统一渲染
+    hydratePreviews(tempList);
+    hydratePreviews(spotList);
+    hydratePreviews(ruleListEl);
     var hasAny = tempKeywords.length > 0 || spotKeywords.length > 0 || matchedRules.some(function (r) {
       return (r.keywords || []).some(function (k) { return k.enabled && (highlightCounts[k.id] || 0) > 0; });
     });
@@ -277,7 +329,7 @@ document.addEventListener('DOMContentLoaded', function () {
       var kwMt = kw.matchType || 'contains';
 
       return '<div class="kw-item" data-kw-id="' + kw.id + '">' +
-        '<span class="kw-dot" data-action="change-color" data-kw-id="' + kw.id + '" data-is-temp="1" style="background:' + (kw.color || '#ffeb3b') + '" title="点击修改颜色"></span>' +
+        previewPlaceholder(StyleKit.resolveStyle(kw, currentSettings), 'change-color', 'data-kw-id="' + kw.id + '" data-is-temp="1"') +
         exclusiveIcon +
         '<span class="kw-text' + (isManuallyHidden ? ' dim' : '') + '" title="' + escapeHtml(kw.text) + '">' + escapeHtml(kw.name || kw.text) + '</span>' +
         '<select class="kw-match-type-select" data-action="change-match-type" data-kw-id="' + kw.id + '" data-is-temp="1">' +
@@ -321,7 +373,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     spotList.innerHTML = spotKeywords.map(function (spot) {
       return '<div class="kw-item" data-spot-id="' + spot.id + '">' +
-        '<span class="kw-dot" data-action="change-spot-color" data-spot-id="' + spot.id + '" style="background:' + (spot.color || '#ffeb3b') + '" title="点击修改颜色"></span>' +
+        previewPlaceholder(StyleKit.resolveStyle(spot, currentSettings), 'change-spot-color', 'data-spot-id="' + spot.id + '"') +
         '<span class="kw-text" title="' + escapeHtml(spot.text) + '">' + escapeHtml(spot.text) + '</span>' +
         '<span class="kw-type">高亮此处</span>' +
         '<div class="kw-actions">' +
@@ -397,7 +449,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
       return '<div class="kw-item ' + statusClass + '" data-kw-id="' + kw.id + '" data-rule-id="' + kw.ruleId + '">' +
         '<span class="kw-rule-name" title="' + escapeHtml(kw.ruleName) + '">' + escapeHtml(kw.ruleName) + '</span>' +
-        '<span class="kw-dot" style="background:' + (kw.color || '#ffeb3b') + '"></span>' +
+        previewPlaceholder(StyleKit.resolveStyle(kw, currentSettings), '', '') +
         exclusiveIcon +
         '<span class="kw-text' + (isEffectivelyHidden ? ' dim' : '') + '" title="' + escapeHtml(kw.text) + '">' + escapeHtml(kw.name || kw.text) + '</span>' +
         '<span class="kw-type">' + getMatchTypeLabel(kw.matchType) + '</span>' +
@@ -424,11 +476,11 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  function openColorPicker(initialColor, anchorEl) {
+  function openStylePanel(style, anchorEl) {
     if (anchorEl) {
       var rect = anchorEl.getBoundingClientRect();
-      var popupW = 220;
-      var popupH = 260;
+      var popupW = 300;
+      var popupH = 320;
       var viewW = document.documentElement.clientWidth || document.body.clientWidth || 420;
       var viewH = document.documentElement.clientHeight || document.body.clientHeight || 640;
       var left = Math.min(rect.left, viewW - popupW - 8);
@@ -444,77 +496,52 @@ document.addEventListener('DOMContentLoaded', function () {
       cppPopup.style.left = left + 'px';
       cppPopup.style.top = useTop + 'px';
     }
-    cppColorInput.value = initialColor;
-    cppHexInput.value = initialColor;
-    renderCppPresets(initialColor);
+    // 与设置页同一套带开关的样式编辑器
+    cppStyleEditor = StyleEditor.mountStyleEditor(cppStyleBody, StyleKit.resolveStyle(style || {}, currentSettings));
     cppPopup.classList.add('show');
   }
 
   function closeColorPicker() {
     cppPopup.classList.remove('show');
     cppTarget = null;
+    cppStyleEditor = null;
   }
 
-  function renderCppPresets(selectedColor) {
-    cppPresets.innerHTML = '';
-    for (var i = 0; i < colorPresets.length; i++) {
-      var c = colorPresets[i];
-      var dot = document.createElement('span');
-      dot.className = 'cpp-preset-dot' + (c === selectedColor ? ' selected' : '');
-      dot.style.background = c;
-      dot.title = c;
-      dot.addEventListener('click', (function (color) {
-        return function () {
-          applyColor(color);
-        };
-      })(c));
-      cppPresets.appendChild(dot);
-    }
-  }
-
-  function applyColor(color) {
+  function applyStyle(overrides) {
     if (!cppTarget) return;
+    if (cppTarget.isTempStyle) {
+      // 搜索区临时样式：应用到「新增临时关键词」的默认样式并持久化记忆
+      selectedTempStyle = StyleKit.keywordOverrides(overrides);
+      persistTempStyle();
+      closeColorPicker();
+      renderSearchColorPresets();
+      return;
+    }
     if (cppTarget.isSpot) {
-      chrome.runtime.sendMessage({ type: 'UPDATE_SPOT_COLOR', spotId: cppTarget.spotId, color: color }).catch(function () {});
-      var spot = spotKeywords.find(function (s) { return s.id === cppTarget.spotId; });
-      if (spot) spot.color = color;
+      // spot 只跟随背景色；背景开关关闭（未设置）时保持原色不动
+      var bg = overrides.bgColor;
+      if (bg !== undefined) {
+        chrome.runtime.sendMessage({ type: 'UPDATE_SPOT_COLOR', spotId: cppTarget.spotId, color: bg }).catch(function () {});
+        var spot = spotKeywords.find(function (s) { return s.id === cppTarget.spotId; });
+        if (spot) spot.color = bg;
+      }
       closeColorPicker();
       renderAll();
       return;
     }
     if (cppTarget.isTemp) {
-      cppTarget.kw.color = color;
+      StyleKit.applyStyleToKeyword(cppTarget.kw, overrides);
       sendTempHighlight();
     } else {
-      updateRuleKeyword(cppTarget.kwId, { color: color });
+      // 只传有显式值的字段；undefined 字段即让关键词恢复「跟随全局默认」
+      updateRuleKeyword(cppTarget.kwId, StyleKit.keywordOverrides(overrides));
     }
     closeColorPicker();
     renderAll();
   }
 
-  cppColorInput.addEventListener('input', function () {
-    var v = cppColorInput.value;
-    cppHexInput.value = v;
-    renderCppPresets(v);
-  });
-
-  cppHexInput.addEventListener('input', function () {
-    var v = cppHexInput.value.trim();
-    if (/^#[0-9a-fA-F]{6}$/.test(v)) {
-      cppColorInput.value = v;
-      renderCppPresets(v);
-    }
-  });
-
-  cppHexInput.addEventListener('blur', function () {
-    var v = cppHexInput.value.trim();
-    if (!/^#[0-9a-fA-F]{6}$/.test(v)) {
-      cppHexInput.value = cppColorInput.value;
-    }
-  });
-
   cppApply.addEventListener('click', function () {
-    applyColor(cppColorInput.value);
+    if (cppStyleEditor) applyStyle(cppStyleEditor.read());
   });
 
   cppCancel.addEventListener('click', closeColorPicker);
@@ -548,7 +575,7 @@ document.addEventListener('DOMContentLoaded', function () {
   async function saveToHistory(text) {
     if (!historyEnabled || !text) return;
     tempHistory = tempHistory.filter(function (h) { return h.text !== text; });
-    tempHistory.unshift({ text: text, matchType: selectedMatchType, caseSensitive: caseSensitive, acrossElements: acrossElements, color: selectedTempColor });
+    tempHistory.unshift({ text: text, matchType: selectedMatchType, caseSensitive: caseSensitive, acrossElements: acrossElements, style: selectedTempStyle ? StyleKit.keywordOverrides(selectedTempStyle) : null });
     if (tempHistory.length > 50) tempHistory = tempHistory.slice(0, 50);
     var settings = await Storage.getSettings();
     settings.tempHistory = tempHistory;
@@ -558,7 +585,9 @@ document.addEventListener('DOMContentLoaded', function () {
   function addTempKeyword() {
     var text = searchInput.value.trim();
     if (!text) return;
-    var kw = { id: uid(), text: text, matchType: selectedMatchType, caseSensitive: caseSensitive, acrossElements: acrossElements, color: selectedTempColor };
+    var kw = { id: uid(), text: text, matchType: selectedMatchType, caseSensitive: caseSensitive, acrossElements: acrossElements };
+    // 把当前选中样式写入关键词字段（不含继承语义：临时关键词用完即弃）
+    StyleKit.applyStyleToKeyword(kw, selectedTempStyle || {});
     tempKeywords.push(kw);
     saveToHistory(text);
     searchInput.value = '';
@@ -615,11 +644,10 @@ document.addEventListener('DOMContentLoaded', function () {
     caseSensitive = h.caseSensitive;
     acrossElements = h.acrossElements || false;
     updateToggleBtns();
-    if (h.color) {
-      selectedTempColor = h.color;
-      searchCustomColor.value = h.color;
-      renderSearchColorPresets();
-    }
+    // 新格式存 style 对象；旧记录只有 color，转成「仅背景色」样式
+    selectedTempStyle = StyleKit.keywordOverrides(h.style || { bgColor: h.color || '' });
+    persistTempStyle();
+    renderSearchColorPresets();
   }
 
   btnHistory.addEventListener('click', function (e) {
@@ -718,7 +746,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (historyOpen && !historyDropdown.contains(e.target) && e.target !== btnHistory && !(cppPopup && cppPopup.contains(e.target))) {
       closeHistoryDropdown();
     }
-    if (cppPopup && cppPopup.classList.contains('show') && !cppPopup.contains(e.target) && !e.target.closest('.kw-dot')) {
+    if (cppPopup && cppPopup.classList.contains('show') && !cppPopup.contains(e.target) && !e.target.closest('.kw-preview') && !e.target.closest('#searchStyleBtn') && !e.target.closest('#searchStylePreview')) {
       closeColorPicker();
     }
   });
@@ -757,10 +785,10 @@ document.addEventListener('DOMContentLoaded', function () {
       var allRules = await Storage.getRules();
       var existingRule = allRules.find(function (r) { return r.urlPattern === urlPattern.trim(); });
       if (existingRule) {
-        await Storage.addKeyword(existingRule.id, { text: kw.text, matchType: kw.matchType, caseSensitive: kw.caseSensitive, acrossElements: kw.acrossElements, color: kw.color });
+        await Storage.addKeyword(existingRule.id, { text: kw.text, matchType: kw.matchType, caseSensitive: kw.caseSensitive, acrossElements: kw.acrossElements, color: kw.color, textColor: kw.textColor, fontSize: kw.fontSize, bold: kw.bold, italic: kw.italic, underline: kw.underline });
       } else {
         var newRule = await Storage.addRule({ urlPattern: urlPattern.trim(), urlMatchType: 'contains' });
-        await Storage.addKeyword(newRule.id, { text: kw.text, matchType: kw.matchType, caseSensitive: kw.caseSensitive, acrossElements: kw.acrossElements, color: kw.color });
+        await Storage.addKeyword(newRule.id, { text: kw.text, matchType: kw.matchType, caseSensitive: kw.caseSensitive, acrossElements: kw.acrossElements, color: kw.color, textColor: kw.textColor, fontSize: kw.fontSize, bold: kw.bold, italic: kw.italic, underline: kw.underline });
       }
       tempKeywords = tempKeywords.filter(function (k) { return k.id !== kwId; });
       hiddenKwIds.delete(kwId);
@@ -806,7 +834,7 @@ document.addEventListener('DOMContentLoaded', function () {
       if (!kw) kw = findRuleKeyword(kwId);
       if (kw) {
         cppTarget = { kwId: kwId, isTemp: isTemp, kw: kw };
-        openColorPicker(kw.color || '#ffeb3b', btn);
+        openStylePanel(kw, btn);
       }
     }
 
@@ -855,7 +883,7 @@ document.addEventListener('DOMContentLoaded', function () {
       var spot = spotKeywords.find(function (s) { return s.id === spotId3; });
       if (spot) {
         cppTarget = { spotId: spotId3, isSpot: true, kw: spot };
-        openColorPicker(spot.color || '#ffeb3b', btn);
+        openStylePanel(spot, btn);
       }
     }
   });

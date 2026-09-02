@@ -35,23 +35,23 @@
     .match-type-btn { font-size: 11px; padding: 3px 8px; border: 1px solid #d9d9d9; border-radius: 3px; background: #fafafa; color: #666; cursor: pointer; transition: all 0.15s; }
     .match-type-btn:hover { border-color: #1890ff; color: #1890ff; }
     .match-type-btn.active { background: #1890ff; color: #fff; border-color: #1890ff; }
-    .toggle-options-row { display: flex; gap: 4px; align-items: center; }
+    .toggle-options-row { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
     .toggle-opt-btn { font-size: 10px; padding: 3px 7px; border: 1px solid #e0e0e0; border-radius: 3px; background: #fafafa; color: #bbb; cursor: pointer; font-weight: 600; transition: all 0.15s; line-height: 1.4; }
     .toggle-opt-btn:hover { border-color: #1890ff; }
     .toggle-opt-btn.active { background: #e6f7ff; color: #1890ff; border-color: #91d5ff; }
     .toggle-opt-btn.across { font-size: 12px; padding: 3px 5px; }
     .color-preset-row { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
-    .preset-dot { width: 28px; height: 28px; border-radius: 50%; cursor: pointer; flex-shrink: 0; border: 1px solid #e0e0e0; transition: transform 0.1s, border-color 0.1s; }
-    .preset-dot:hover { transform: scale(1.15); }
-    .preset-dot.selected { border-color: #1890ff; }
+    .preset-dot { cursor: pointer; flex-shrink: 0; border: 2px solid transparent; border-radius: 5px; padding: 2px; line-height: 0; transition: transform 0.1s, border-color 0.1s; }
+    .preset-dot:hover { transform: scale(1.1); }
+    .preset-dot.selected { box-shadow: 0 0 0 2px #1890ff; }
     .section { border-bottom: 1px solid #f0f0f0; }
     .section-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; background: #f9f9f9; font-size: 12px; color: #666; font-weight: 500; }
     .section-header .badge { background: #e6f7ff; color: #1890ff; font-size: 11px; padding: 2px 8px; border-radius: 8px; }
     .kw-list { padding: 6px 16px 10px; }
     .kw-item { display: flex; align-items: center; padding: 6px 0; gap: 6px; border-bottom: 1px solid #f5f5f5; font-size: 13px; }
     .kw-item:last-child { border-bottom: none; }
-    .kw-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; cursor: pointer; transition: transform 0.1s; }
-    .kw-dot:hover { transform: scale(1.4); }
+    .kw-preview { cursor: pointer; flex-shrink: 0; transition: transform 0.1s; }
+    .kw-preview:hover { transform: scale(1.15); }
     .kw-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .kw-text.dim { color: #bbb; text-decoration: line-through; }
     .kw-type { font-size: 10px; color: #999; background: #f5f5f5; padding: 2px 6px; border-radius: 3px; flex-shrink: 0; }
@@ -59,18 +59,28 @@
     .kw-rule-name { font-size: 10px; color: #999; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
     .kw-exclusive-icon { font-size: 11px; margin-right: 3px; }
     .kw-item.kw-auto-hidden { opacity: 0.5; background: #f5f5f5; }
-    .color-picker-popup { position: fixed; z-index: 99999; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,0.12); padding: 12px; min-width: 200px; display: none; max-height: 280px; overflow-y: auto; }
+    .color-picker-popup { position: fixed; z-index: 99999; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,0.12); padding: 12px; width: 300px; display: none; max-height: 320px; overflow-y: auto; }
     .color-picker-popup.show { display: block; }
-    .cpp-title { font-size: 12px; font-weight: 500; color: #333; margin-bottom: 8px; }
-    .cpp-presets { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
-    .cpp-preset-dot { width: 28px; height: 28px; border-radius: 50%; cursor: pointer; flex-shrink: 0; border: 1px solid #d0d0d0; transition: transform 0.1s, border-color 0.1s; }
-    .cpp-preset-dot:hover { transform: scale(1.15); }
-    .cpp-preset-dot.selected { border-color: #1890ff; }
-    .cpp-custom-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
-    .cpp-custom-row input[type="color"] { width: 32px; height: 32px; padding: 0; border: 1px solid #d9d9d9; border-radius: 4px; cursor: pointer; flex-shrink: 0; }
-    .cpp-custom-row input[type="text"] { flex: 1; padding: 4px 8px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 12px; outline: none; font-family: monospace; }
-    .cpp-custom-row input[type="text"]:focus { border-color: #1890ff; }
-    .cpp-actions { display: flex; gap: 6px; justify-content: flex-end; }
+    .cpp-title { font-size: 12px; font-weight: 500; color: #333; margin-bottom: 10px; }
+    .se-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+    .se-row:last-child { margin-bottom: 0; }
+    .se-label { width: 32px; font-size: 12px; color: #999; flex-shrink: 0; }
+    .se-toggle { flex-shrink: 0; width: auto; margin: 0; }
+    .se-row input[type="color"] { width: 24px; height: 24px; padding: 0; border: 1px solid #d9d9d9; border-radius: 3px; cursor: pointer; flex-shrink: 0; background: none; }
+    .se-row input[type="color"]:disabled { opacity: 0.3; cursor: not-allowed; }
+    .se-row input[type="text"] { flex: 1; min-width: 0; padding: 3px 6px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 12px; outline: none; font-family: monospace; }
+    .se-row input[type="text"]:focus { border-color: #1890ff; }
+    .se-row select { flex: 1; min-width: 0; padding: 3px 6px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 12px; outline: none; background: #fff; color: #333; }
+    .se-row select:disabled, .se-row input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
+    .se-row input[type="range"] { flex: 1; min-width: 0; }
+    .se-fs-val { font-size: 12px; width: 34px; text-align: right; flex-shrink: 0; color: #666; }
+    .se-chip { min-width: 26px; height: 22px; border: 1px solid #d9d9d9; border-radius: 4px; background: #fff; cursor: pointer; font-size: 12px; color: #666; line-height: 1; }
+    .se-chip:hover { border-color: #1890ff; }
+    .se-chip.on { background: #e6f7ff; color: #1890ff; border-color: #91d5ff; }
+    .se-chip.b { font-weight: 700; }
+    .se-chip.i { font-style: italic; }
+    .se-chip.u { text-decoration: underline; }
+    .cpp-actions { display: flex; gap: 6px; justify-content: flex-end; margin-top: 12px; }
     .manual-clear-badge { display: flex; align-items: center; justify-content: flex-end; padding: 6px 16px; background: #fffbe6; border-top: 1px dashed #ffe58f; }
     .empty-hint { padding: 12px 16px; font-size: 12px; color: #bbb; text-align: center; }
     .footer { padding: 12px 16px; display: flex; gap: 8px; align-items: center; justify-content: space-between; background: #fff; border-top: 1px solid #e8e8e8; position: sticky; bottom: 0; }
@@ -127,8 +137,9 @@
         <button class="toggle-opt-btn across" id="searchAcrossElements" title="跨元素匹配">↔</button>
       </div>
       <div class="toggle-options-row">
+        <span id="searchStylePreview" title="当前临时高亮样式，点击编辑"></span>
         <div class="color-preset-row" id="searchColorPresets"></div>
-        <input type="color" id="searchCustomColor" value="#ffeb3b" style="width:28px;height:28px;padding:0;border:1px solid #d9d9d9;border-radius:4px;cursor:pointer;flex-shrink:0;" title="自定义颜色">
+        <button class="btn btn-sm" id="searchStyleBtn" title="自定义样式：背景色 / 文字颜色 / 字号 / 字形" style="flex-shrink:0;">自定义样式</button>
       </div>
     </div>
   </div>
@@ -158,12 +169,8 @@
   <div class="history-dropdown" id="historyDropdown"></div>
 
   <div class="color-picker-popup" id="colorPickerPopup">
-    <div class="cpp-title">修改颜色</div>
-    <div class="cpp-presets" id="cppPresets"></div>
-    <div class="cpp-custom-row">
-      <input type="color" id="cppColorInput">
-      <input type="text" id="cppHexInput" placeholder="#ffeb3b" maxlength="7">
-    </div>
+    <div class="cpp-title">自定义样式</div>
+    <div id="cppStyleBody"></div>
     <div class="cpp-actions">
       <button class="btn btn-sm" id="cppCancel">取消</button>
       <button class="btn btn-sm btn-primary" id="cppApply">应用</button>
@@ -172,6 +179,8 @@
 
   <script src="../utils/matcher.js"></script>
   <script src="../utils/storage.js"></script>
+  <script src="../utils/style.js"></script>
+  <script src="../utils/style-editor.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

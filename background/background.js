@@ -65,7 +65,8 @@ async function getRules() {
 }
 
 async function getSettings() {
-  var defaults = { showRail: true, defaultColor: '#ffeb3b' };
+  // 全局默认样式由 settings.stylePresets[0] 提供，不再使用 defaultColor
+  var defaults = { showRail: true };
   var d = await _bgGetStorage(SETTINGS_KEY);
   return Object.assign({}, defaults, d[SETTINGS_KEY] || {});
 }
@@ -271,8 +272,15 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
           var arr = results[r];
           if (!Array.isArray(arr)) continue;
           for (var i = 0; i < arr.length; i++) {
-            var key = arr[i].text + '|' + arr[i].color + '|' + arr[i].matchType;
-            if (!seen[key]) { seen[key] = true; merged.push(arr[i]); }
+            var item = arr[i];
+            // 去重 key 覆盖全部样式字段，避免同文本不同样式的临时关键词被误合并
+            var key = item.text + '|' + item.color + '|' + item.matchType +
+              '|' + (item.fontSize || 1) +
+              '|' + (item.textColor || '') +
+              '|' + (item.bold ? '1' : '0') +
+              '|' + (item.italic ? '1' : '0') +
+              '|' + (item.underline ? '1' : '0');
+            if (!seen[key]) { seen[key] = true; merged.push(item); }
           }
         }
         sendResponse(merged);
