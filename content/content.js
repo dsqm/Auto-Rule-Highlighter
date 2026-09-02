@@ -29,7 +29,6 @@
   var keywordGlobalOrder = {};
   var exclusiveStopOrder = -1;
   var pageDisabled = false;
-  var navMarkIndex = {};
   var domOrderCache = new WeakMap();
   var domOrderCounter = 0;
   var highlightDirty = false;
@@ -156,7 +155,15 @@
       return true;
     }
     if (msg.type === 'NAV_MARK') {
-      navigateToMark(msg.kwId, msg.direction);
+      // 关键词导航改由 background 跨 frame 协调后走 NAV_MARK_AT，这里只处理「高亮此处」定位
+      if (msg.kwId && msg.kwId.indexOf('spot_') === 0) navigateToSpotMark(msg.kwId);
+    }
+    if (msg.type === 'NAV_MARK_AT') {
+      navigateToMarkAt(msg.kwId, msg.localIndex, msg.globalIndex, msg.globalTotal, msg.isRetry === true);
+    }
+    if (msg.type === 'GET_KW_COUNT') {
+      sendResponse({ count: getVisibleKwMarks(msg.kwId).length });
+      return true;
     }
     if (msg.type === 'CONTEXT_ADD_HIGHLIGHT') {
       var selText = msg.text;
@@ -265,8 +272,14 @@
   }
 
   function applyHighlight(rules, settings) {
+    // 弹窗每次打开都会触发 REFRESH_HIGHLIGHT；规则与设置都没变时跳过重建，
+    // 否则已有高亮被全部拆掉后只有视口附近会懒加载恢复，导航会退化成只看到 1 条
+    var unchanged = currentRules.length === rules.length &&
+      JSON.stringify(currentRules) === JSON.stringify(rules) &&
+      JSON.stringify(currentSettings) === JSON.stringify(settings);
     currentRules = rules;
     currentSettings = settings;
+    if (unchanged) return;
     // 规则或设置刚变过，样式缓存必须失效，否则会拿旧样式渲染新配置
     invalidateStyleMap();
     if (pageDisabled) return;
@@ -427,7 +440,7 @@
     if (pendingNavigation) {
       var nav = pendingNavigation;
       pendingNavigation = null;
-      setTimeout(function () { navigateToMark(nav.kwId, nav.direction); }, 0);
+      setTimeout(function () { navigateToMarkAt(nav.kwId, nav.localIndex, nav.globalIndex, nav.globalTotal, true); }, 0);
     }
     if (pendingIncremental) {
       setTimeout(incrementalHighlight, 0);
@@ -1160,7 +1173,6 @@
     activeHighlight = null; isHighlighting = false;
     exclusiveStopOrder = -1;
     batchTextNodes = null;
-    navMarkIndex = {};
     highlightDirty = false;
     pendingIncremental = false;
     if (highlightIndex > MAX_HIGHLIGHT_INDEX) highlightIndex = 0;
@@ -1373,45 +1385,60 @@
     }
   }
 
-  function navigateToMark(kwId, direction) {
-    if (kwId && kwId.indexOf('spot_') === 0) {
-      var spotId = kwId.replace('spot_', '');
-      var spotEls = document.querySelectorAll('ah-spot[data-ah-spot-id="' + spotId + '"]');
-      if (spotEls.length === 0) return;
-      var connectedEls = [];
-      for (var se = 0; se < spotEls.length; se++) {
-        if (spotEls[se].isConnected) connectedEls.push(spotEls[se]);
-      }
-      if (connectedEls.length === 0) return;
-      try { connectedEls[0].scrollIntoView({ block: 'center' }); } catch (e) {}
-      if (activeHighlight) activeHighlight.classList.remove('ah-blinking');
-      for (var ce = 0; ce < connectedEls.length; ce++) {
-        connectedEls[ce].classList.add('ah-blinking');
-      }
-      activeHighlight = connectedEls[0];
-      setTimeout(function () {
-        for (var ce2 = 0; ce2 < connectedEls.length; ce2++) {
-          if (connectedEls[ce2].isConnected) connectedEls[ce2].classList.remove('ah-blinking');
-        }
-      }, 900);
-      try {
-        chrome.runtime.sendMessage({ type: 'NAV_MARK_RESULT', kwId: kwId, index: 0, total: connectedEls.length });
-      } catch (e) {}
-      return;
-    }
+  /** 与 GET_HIGHLIGHT_COUNT 同口径收集本 frame 内该关键词的可见 mark，保证导航计数与弹窗计数一致 */
+  function getVisibleKwMarks(kwId) {
     var allMarks = getAllHighlightMarks();
     var kwMarks = [];
+    var isTempKw = kwId && kwId.indexOf('tmp_') === 0;
+    var isManuallyShown = manualShowKwIds.indexOf(kwId) >= 0;
+    var isManuallyHidden = hiddenKwIds.indexOf(kwId) >= 0;
     for (var i = 0; i < allMarks.length; i++) {
       var m = allMarks[i];
       if (m.dataset.ahKeywordId !== kwId) continue;
-      if (m.dataset.ahHidden === 'true') continue;
+      var order = parseInt(m.dataset.ahGlobalOrder, 10);
+      var isHiddenByExclusive = !isTempKw && exclusiveStopOrder >= 0 && !isNaN(order) && order !== exclusiveStopOrder;
+      if (isManuallyHidden && !isManuallyShown) continue;
+      if (isHiddenByExclusive && !isManuallyShown) continue;
+      if (m.dataset.ahHidden === 'true' && !isManuallyShown) continue;
       if (!m.isConnected) continue;
       kwMarks.push(m);
     }
+    return kwMarks;
+  }
+
+  function navigateToSpotMark(kwId) {
+    var spotId = kwId.replace('spot_', '');
+    var spotEls = document.querySelectorAll('ah-spot[data-ah-spot-id="' + spotId + '"]');
+    if (spotEls.length === 0) return;
+    var connectedEls = [];
+    for (var se = 0; se < spotEls.length; se++) {
+      if (spotEls[se].isConnected) connectedEls.push(spotEls[se]);
+    }
+    if (connectedEls.length === 0) return;
+    try { connectedEls[0].scrollIntoView({ block: 'center' }); } catch (e) {}
+    if (activeHighlight) activeHighlight.classList.remove('ah-blinking');
+    for (var ce = 0; ce < connectedEls.length; ce++) {
+      connectedEls[ce].classList.add('ah-blinking');
+    }
+    activeHighlight = connectedEls[0];
+    setTimeout(function () {
+      for (var ce2 = 0; ce2 < connectedEls.length; ce2++) {
+        if (connectedEls[ce2].isConnected) connectedEls[ce2].classList.remove('ah-blinking');
+      }
+    }, 900);
+    try {
+      chrome.runtime.sendMessage({ type: 'NAV_MARK_RESULT', kwId: kwId, index: 0, total: connectedEls.length });
+    } catch (e) {}
+  }
+
+  /** 跳转到本 frame 内第 localIndex 个（0 起）可见 mark；全局序号由 background 计算后一并带回 */
+  function navigateToMarkAt(kwId, localIndex, globalIndex, globalTotal, isRetry) {
+    var kwMarks = getVisibleKwMarks(kwId);
     if (kwMarks.length === 0) {
-      if (!forceFullHighlight) {
+      // 兜底：懒加载区域的目标可能尚未生成 mark，强制全量高亮后重试一次；isRetry 防止死循环
+      if (!isRetry) {
         forceFullHighlight = true;
-        pendingNavigation = { kwId: kwId, direction: direction };
+        pendingNavigation = { kwId: kwId, localIndex: localIndex, globalIndex: globalIndex, globalTotal: globalTotal, isRetry: true };
         reHighlight();
       }
       return;
@@ -1421,27 +1448,22 @@
       return getElTopPosition(a) - getElTopPosition(b);
     });
 
-    if (!(kwId in navMarkIndex)) navMarkIndex[kwId] = -1;
+    if (!(localIndex >= 0)) localIndex = 0;
+    if (localIndex >= kwMarks.length) localIndex = kwMarks.length - 1;
 
-    if (direction === 'next') {
-      navMarkIndex[kwId]++;
-      if (navMarkIndex[kwId] >= kwMarks.length) navMarkIndex[kwId] = 0;
-    } else {
-      navMarkIndex[kwId]--;
-      if (navMarkIndex[kwId] < 0) navMarkIndex[kwId] = kwMarks.length - 1;
-    }
-
-    var target = kwMarks[navMarkIndex[kwId]];
+    var target = kwMarks[localIndex];
     if (!target || !target.isConnected) return;
 
     try { target.scrollIntoView({ block: 'center' }); } catch (e) {}
+    // 同源 iframe 内的目标：把 iframe 自身也滚进父页面视口，避免父页面纹丝不动
+    try { if (isInIframe && window.frameElement) window.frameElement.scrollIntoView({ block: 'center' }); } catch (e) {}
     if (activeHighlight) activeHighlight.classList.remove('ah-blinking');
     activeHighlight = target;
     activeHighlight.classList.add('ah-blinking');
     setTimeout(function () { if (activeHighlight) activeHighlight.classList.remove('ah-blinking'); }, 900);
 
     try {
-      chrome.runtime.sendMessage({ type: 'NAV_MARK_RESULT', kwId: kwId, index: navMarkIndex[kwId], total: kwMarks.length });
+      chrome.runtime.sendMessage({ type: 'NAV_MARK_RESULT', kwId: kwId, index: globalIndex, total: globalTotal });
     } catch (e) {}
   }
 

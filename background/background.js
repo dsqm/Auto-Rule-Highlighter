@@ -20,6 +20,15 @@ async function _bgGetStorage(keys) {
 }
 var disabledTabs = {};
 var tabBadgeCounts = {};
+// 关键词导航的全局游标（跨 frame 合并计数后按全局序号接力）：key = tabId|kwId
+var navStates = {};
+
+function clearNavStatesForTab(tabId) {
+  var prefix = tabId + '|';
+  for (var key in navStates) {
+    if (navStates.hasOwnProperty(key) && key.indexOf(prefix) === 0) delete navStates[key];
+  }
+}
 
 async function loadDisabledTabs() {
   var data = await chrome.storage.local.get('ah_disabled_tabs');
@@ -104,7 +113,7 @@ async function sendToAllFrames(tabId, msg) {
   }
 }
 
-function queryAllFrames(tabId, msg) {
+function queryAllFramesWithIds(tabId, msg) {
   return new Promise(function (resolve) {
     chrome.webNavigation.getAllFrames({ tabId: tabId }, function (frames) {
       if (!frames || frames.length === 0 || chrome.runtime.lastError) {
@@ -124,7 +133,7 @@ function queryAllFrames(tabId, msg) {
               if (pending === 0) { done = true; resolve(results); }
               return;
             }
-            results.push(resp);
+            results.push({ frameId: frameId, resp: resp });
             pending--;
             if (pending === 0) { done = true; resolve(results); }
           });
@@ -133,6 +142,55 @@ function queryAllFrames(tabId, msg) {
       if (pending === 0) { done = true; resolve(results); }
     });
   });
+}
+
+function queryAllFrames(tabId, msg) {
+  return queryAllFramesWithIds(tabId, msg).then(function (results) {
+    return results.map(function (r) { return r.resp; });
+  });
+}
+
+/**
+ * 关键词导航的跨 frame 协调：
+ * 弹窗计数是全部 frame 合并后的总数，跳转也必须按全局序号在 frame 间接力，
+ * 否则各 frame 各自为政时，某个只有 1 处匹配的 frame 回传的 1/1 会覆盖掉正确计数。
+ */
+async function handleNavMark(tabId, kwId, direction) {
+  var results = await queryAllFramesWithIds(tabId, { type: 'GET_KW_COUNT', kwId: kwId });
+  var frames = [];
+  var total = 0;
+  for (var i = 0; i < results.length; i++) {
+    var count = (results[i].resp && results[i].resp.count) || 0;
+    if (count > 0) {
+      frames.push({ frameId: results[i].frameId, count: count });
+      total += count;
+    }
+  }
+  if (total === 0) return;
+  frames.sort(function (a, b) { return a.frameId - b.frameId; });
+
+  var key = tabId + '|' + kwId;
+  if (!navStates[key]) navStates[key] = { pos: -1 };
+  var st = navStates[key];
+  if (direction === 'next') st.pos = (st.pos + 1) % total;
+  else st.pos = (st.pos - 1 + total) % total;
+
+  var acc = 0;
+  for (var f = 0; f < frames.length; f++) {
+    if (st.pos < acc + frames[f].count) {
+      try {
+        await chrome.tabs.sendMessage(tabId, {
+          type: 'NAV_MARK_AT',
+          kwId: kwId,
+          localIndex: st.pos - acc,
+          globalIndex: st.pos,
+          globalTotal: total
+        }, { frameId: frames[f].frameId });
+      } catch (e) {}
+      return;
+    }
+    acc += frames[f].count;
+  }
 }
 
 function buildContextMenus(settings) {
@@ -179,7 +237,11 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   }
   if (msg.type === 'REFRESH_HIGHLIGHT') {
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-      if (tabs[0]) sendHighlightToTab(tabs[0].id, tabs[0].url);
+      if (tabs[0]) {
+        // 弹窗重新打开：导航游标归零，与弹窗初始显示的 1/N 对齐
+        clearNavStatesForTab(tabs[0].id);
+        sendHighlightToTab(tabs[0].id, tabs[0].url);
+      }
     });
     return false;
   }
@@ -208,7 +270,13 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   }
   if (msg.type === 'NAV_MARK') {
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-      if (tabs[0]) sendToAllFrames(tabs[0].id, msg);
+      if (!tabs[0]) return;
+      // 「高亮此处」没有序号展示，保持广播定位；关键词导航走跨 frame 协调
+      if (msg.kwId && msg.kwId.indexOf('spot_') === 0) {
+        sendToAllFrames(tabs[0].id, msg);
+      } else {
+        handleNavMark(tabs[0].id, msg.kwId, msg.direction);
+      }
     });
     return false;
   }
@@ -448,6 +516,8 @@ chrome.commands.onCommand.addListener(function (command) {
 chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
   if (changeInfo.status === 'complete' && tab.url) {
     if (!disabledTabs[tabId]) {
+      // 文档重新加载时才清空角标计数；弹窗打开等场景高亮未重建，不能丢掉各 frame 已上报的数
+      tabBadgeCounts[tabId] = { frames: {} };
       sendHighlightToTab(tabId, tab.url);
     }
   }
@@ -467,12 +537,12 @@ chrome.tabs.onActivated.addListener(function (activeInfo) {
 chrome.tabs.onRemoved.addListener(function (tabId) {
   delete disabledTabs[tabId];
   delete tabBadgeCounts[tabId];
+  clearNavStatesForTab(tabId);
   saveDisabledTabs();
 });
 
 async function sendHighlightToTab(tabId, url) {
   try {
-    tabBadgeCounts[tabId] = { frames: {} };
     var rules = await getMatchedRules(url);
     var settings = await getSettings();
     await sendToAllFrames(tabId, { type: 'APPLY_HIGHLIGHT', rules: rules, settings: settings });
