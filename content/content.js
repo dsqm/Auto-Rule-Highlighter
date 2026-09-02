@@ -1,7 +1,6 @@
 (function () {
   var HIGHLIGHT_TAG = 'ah-mark';
   var RAIL_TAG = 'ah-rail';
-  var MAX_HIGHLIGHT_INDEX = 10000000;
 
   var isInIframe = (function () {
     try { return window.self !== window.top; } catch (e) { return true; }
@@ -9,7 +8,6 @@
 
   var currentRules = [];
   var currentSettings = {};
-  var highlightIndex = 0;
   var railEl = null;
   var activeHighlight = null;
   var bodyObserver = null;
@@ -26,9 +24,13 @@
   var railMarkMap = new WeakMap();
   var batchTextNodes = null;
   var BATCH_SIZE = 200;
+  var batchNearBoundary = 0;
+  var batchNearHookDone = false;
+  var batchGeneration = 0;
   var keywordGlobalOrder = {};
   var exclusiveStopOrder = -1;
   var pageDisabled = false;
+  var highlightEverApplied = false;
   var domOrderCache = new WeakMap();
   var domOrderCounter = 0;
   var highlightDirty = false;
@@ -53,17 +55,30 @@
     }
   }
 
+  // 文档坐标缓存：滚动不改变文档坐标，缓存后滚动期间 rail 重排不再每个 mark 量一次 rect
+  var elTopCache = new WeakMap();
+
+  function invalidateElTopCache() {
+    elTopCache = new WeakMap();
+  }
+
   function getElTopPosition(el) {
+    if (elTopCache.has(el)) return elTopCache.get(el);
     var rect = getSafeRect(el);
+    var top;
     if (rect) {
       var scrollTop = window.pageYOffset || document.documentElement.scrollTop || 0;
-      return scrollTop + rect.top;
+      top = scrollTop + rect.top;
+    } else {
+      var order = domOrderCache.get(el);
+      if (typeof order !== 'number') {
+        order = domOrderCounter++;
+        domOrderCache.set(el, order);
+      }
+      top = order;
     }
-    var order = domOrderCache.get(el);
-    if (typeof order === 'number') return order;
-    order = domOrderCounter++;
-    domOrderCache.set(el, order);
-    return order;
+    elTopCache.set(el, top);
+    return top;
   }
 
   function isElementNearViewport(el) {
@@ -257,29 +272,77 @@
         return;
       }
       if (response && response.length > 0) {
-        currentRules = response;
-        requestSettingsFromBackground();
+        var rules = response;
+        chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, function (settings) {
+          if (chrome.runtime.lastError) settings = {};
+          // 必须传局部变量：applyHighlight 要拿 rules 与 currentRules（旧值）对比，
+          // 若先把结果写回 currentRules 再传自身，unchanged 恒为 true，首次高亮会被短路
+          applyHighlight(rules, settings || {});
+        });
       }
     });
   }
 
-  function requestSettingsFromBackground() {
-    chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, function (settings) {
-      if (chrome.runtime.lastError) settings = {};
-      currentSettings = settings || {};
-      applyHighlight(currentRules, currentSettings);
-    });
+  // ---- 运行时样式类：每个去重样式生成一条 .ah-kw-N 规则，mark 只写 class 不写内联样式。
+  //      大量 mark 时省掉每元素 8 次内联样式写入与样式重算，这是密集页面的主要开销 ----
+  var dynCssParts = [];
+  var dynStyleVersion = 0;
+  var dynStyleEl = null;
+  var styleClassMap = {};
+
+  function ensureDynStyleEl() {
+    if (dynStyleEl && dynStyleEl.isConnected) return;
+    dynStyleEl = document.getElementById('ah-dyn-styles');
+    if (!dynStyleEl || !dynStyleEl.isConnected) {
+      dynStyleEl = document.createElement('style');
+      dynStyleEl.id = 'ah-dyn-styles';
+      (document.head || document.documentElement).appendChild(dynStyleEl);
+    }
+  }
+
+  function styleClassFor(style) {
+    var key = StyleKit.serialize(style);
+    if (styleClassMap[key] !== undefined) return 'ah-kw-' + styleClassMap[key];
+    var idx = dynCssParts.length;
+    styleClassMap[key] = idx;
+    var decls = [];
+    if (style.bgColor) {
+      decls.push('background-color:' + style.bgColor, 'padding:0', 'border-radius:2px');
+    } else {
+      decls.push('background-color:transparent', 'padding:0', 'border-radius:0');
+    }
+    decls.push('color:' + StyleKit.resolveTextColor(style));
+    if (style.fontSize && style.fontSize !== 1) decls.push('font-size:' + style.fontSize + 'em');
+    if (style.bold) decls.push('font-weight:700');
+    if (style.italic) decls.push('font-style:italic');
+    var deco = StyleKit.decorationOf(style);
+    if (deco) decls.push('text-decoration:' + deco);
+    dynCssParts.push('.ah-kw-' + idx + '{' + decls.join(';') + '}');
+    dynStyleVersion++;
+    ensureDynStyleEl();
+    dynStyleEl.textContent = dynCssParts.join('');
+    return 'ah-kw-' + idx;
+  }
+
+  /** 高亮开始前为全部关键词预注册样式类，保证 shadow root 注入样式时规则已齐全 */
+  function registerKeywordClasses(keywords) {
+    for (var i = 0; i < keywords.length; i++) {
+      styleClassFor(StyleKit.resolveStyle(keywords[i], currentSettings));
+    }
   }
 
   function applyHighlight(rules, settings) {
     // 弹窗每次打开都会触发 REFRESH_HIGHLIGHT；规则与设置都没变时跳过重建，
-    // 否则已有高亮被全部拆掉后只有视口附近会懒加载恢复，导航会退化成只看到 1 条
-    var unchanged = currentRules.length === rules.length &&
+    // 否则已有高亮被全部拆掉后只有视口附近会懒加载恢复，导航会退化成只看到 1 条。
+    // 但「从未应用过高亮」时必须执行，否则首次加载即被短路，整个页面永远不高亮
+    var unchanged = highlightEverApplied &&
+      currentRules.length === rules.length &&
       JSON.stringify(currentRules) === JSON.stringify(rules) &&
       JSON.stringify(currentSettings) === JSON.stringify(settings);
     currentRules = rules;
     currentSettings = settings;
     if (unchanged) return;
+    highlightEverApplied = true;
     // 规则或设置刚变过，样式缓存必须失效，否则会拿旧样式渲染新配置
     invalidateStyleMap();
     if (pageDisabled) return;
@@ -295,28 +358,20 @@
     removeHighlights();
     if (typeof Matcher === 'undefined') return;
 
+    registerKeywordClasses(keywords);
     injectStylesToAllShadowRoots();
-
-    precomputeExclusiveStopOrder(keywords);
 
     isHighlighting = true;
     highlightBatch(keywords, 0);
   }
 
   function injectStylesToAllShadowRoots() {
+    // documentElement 的 TreeWalker 已覆盖 body 子树，无需重复遍历
     var walker = document.createTreeWalker(document.documentElement || document, NodeFilter.SHOW_ELEMENT);
     var el;
     while (el = walker.nextNode()) {
       if (el.shadowRoot && el.shadowRoot.mode !== 'closed') {
         injectShadowStyles(el.shadowRoot);
-      }
-    }
-    if (document.body) {
-      var bodyWalker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
-      while (el = bodyWalker.nextNode()) {
-        if (el.shadowRoot && el.shadowRoot.mode !== 'closed') {
-          injectShadowStyles(el.shadowRoot);
-        }
       }
     }
   }
@@ -344,11 +399,10 @@
     removeHighlights();
     if (pageDisabled) return;
 
-    injectStylesToAllShadowRoots();
-
     if (typeof Matcher === 'undefined') return;
 
-    precomputeExclusiveStopOrder(keywords);
+    registerKeywordClasses(keywords);
+    injectStylesToAllShadowRoots();
 
     isHighlighting = true;
     highlightBatch(keywords, 0);
@@ -370,8 +424,8 @@
 
     if (typeof Matcher === 'undefined') return;
 
+    registerKeywordClasses(keywords);
     injectStylesToAllShadowRoots();
-    precomputeExclusiveStopOrder(keywords);
 
     batchTextNodes = null;
     isHighlighting = true;
@@ -427,16 +481,33 @@
     exclusiveStopOrder = minExclusiveOrder;
   }
 
-  function onHighlightBatchComplete() {
-    batchTextNodes = null;
-    isHighlighting = false;
-    forceFullHighlight = false;
+  /** 视口阶段完成：立即挂 rail / 观察器 / 滚动监听，用户此刻就能看到并交互，不等后台远节点 */
+  function onNearPhaseComplete() {
     invalidateKeywordMapCache();
     if (!isInIframe && shouldShowRail()) createRail();
     setupBodyObserver();
     setupLazyHighlightScroll();
     applyVisibility();
     if (!isInIframe) updateBadge();
+  }
+
+  /** 全部节点（含后台补齐的远节点）处理完：收尾 */
+  function onHighlightBatchComplete() {
+    batchTextNodes = null;
+    isHighlighting = false;
+    forceFullHighlight = false;
+    invalidateKeywordMapCache();
+    invalidateElTopCache();
+    // 兜底：关键词全部是跨元素类型时没有普通节点循环，视口钩子在此补触发
+    if (!batchNearHookDone) {
+      batchNearHookDone = true;
+      onNearPhaseComplete();
+    }
+    if (!isInIframe) {
+      // 远节点 mark 这时才存在，重画轨道与角标
+      if (railEl) renderRail();
+      updateBadge();
+    }
     if (pendingNavigation) {
       var nav = pendingNavigation;
       pendingNavigation = null;
@@ -447,54 +518,81 @@
     }
   }
 
-  function highlightBatch(keywords, startIdx) {
-    if (!batchTextNodes) batchTextNodes = getAllTextNodes();
+  function highlightBatch(keywords, startIdx, gen) {
+    // 代际校验：removeHighlights / 新一轮批处理会让旧链过期，避免两条链并发重复处理
+    if (!gen) gen = ++batchGeneration;
+    else if (gen !== batchGeneration) return;
+
+    if (!batchTextNodes) {
+      // 全量收集后重排：视口内节点排前（立即出效果），视口外节点排后在后台分片补齐。
+      // 锚点跳转/快速滚动到页面任何位置时高亮都已存在，不再依赖滚动事件补齐
+      var all = getAllTextNodes();
+      var near = [], far = [];
+      for (var n = 0; n < all.length; n++) {
+        var par = all[n].parentElement;
+        if (par && isElementNearViewport(par)) near.push(all[n]);
+        else far.push(all[n]);
+      }
+      batchNearBoundary = near.length;
+      batchNearHookDone = false;
+      batchTextNodes = near.concat(far);
+      // 独占序号直接用本批已收集的节点计算，避免再走一遍全页 TreeWalker
+      precomputeExclusiveStopOrder(keywords, batchTextNodes);
+    }
 
     var hasAcross = false;
     for (var ak = 0; ak < keywords.length; ak++) {
       if (keywords[ak].acrossElements) { hasAcross = true; break; }
     }
 
-    if (!hasAcross) {
+    var normalKws = keywords;
+    var acrossKws = null;
+    if (hasAcross) {
+      normalKws = [];
+      acrossKws = [];
+      for (var ak2 = 0; ak2 < keywords.length; ak2++) {
+        if (keywords[ak2].acrossElements) acrossKws.push(keywords[ak2]);
+        else normalKws.push(keywords[ak2]);
+      }
+    }
+
+    if (normalKws.length > 0) {
+      // 样式类与快筛只构建一次，整个批处理复用
+      var kwClasses = buildKwClasses(normalKws);
+      var quick = buildQuickFilter(normalKws);
       var end = Math.min(startIdx + BATCH_SIZE, batchTextNodes.length);
+      var deadline = performance.now() + 12;
       for (var i = startIdx; i < end; i++) {
+        // 时间片：超出预算就让出主线程，页面不冻结
+        if (i > startIdx && ((i - startIdx) & 31) === 31 && performance.now() > deadline) {
+          end = i;
+          break;
+        }
         var node = batchTextNodes[i];
-        if (node && node.isConnected && isElementNearViewport(node.parentElement)) highlightTextNode(node, keywords);
+        if (node && node.isConnected) highlightTextNode(node, normalKws, kwClasses, quick);
+      }
+      // 视口节点刚全部处理完：立即挂 rail / 观察器 / 滚动监听，不等后台远节点跑完
+      if (!batchNearHookDone && end >= batchNearBoundary) {
+        batchNearHookDone = true;
+        onNearPhaseComplete();
       }
       if (end < batchTextNodes.length) {
-        setTimeout(function () { highlightBatch(keywords, end); }, 0);
-      } else {
-        onHighlightBatchComplete();
+        setTimeout(function () { highlightBatch(keywords, end, gen); }, 0);
+        return;
       }
-      return;
     }
 
-    var normalKws = [];
-    var acrossKws = [];
-    for (var ak2 = 0; ak2 < keywords.length; ak2++) {
-      if (keywords[ak2].acrossElements) acrossKws.push(keywords[ak2]);
-      else normalKws.push(keywords[ak2]);
+    if (acrossKws && acrossKws.length > 0) {
+      highlightAcrossElements(acrossKws, getAllTextNodes(), buildKwClasses(acrossKws));
     }
-
-    var end2 = Math.min(startIdx + BATCH_SIZE, batchTextNodes.length);
-    for (var i2 = startIdx; i2 < end2; i2++) {
-      var node2 = batchTextNodes[i2];
-      if (!node2 || !node2.isConnected) continue;
-      if (!isElementNearViewport(node2.parentElement)) continue;
-      if (normalKws.length > 0) highlightTextNode(node2, normalKws);
-    }
-
-    if (end2 >= batchTextNodes.length) {
-      if (acrossKws.length > 0) highlightAcrossElements(acrossKws, getAllTextNodes());
-      onHighlightBatchComplete();
-    } else {
-      setTimeout(function () { highlightBatch(keywords, end2); }, 0);
-    }
+    onHighlightBatchComplete();
   }
 
-  function highlightAcrossElements(keywords, allTextNodes) {
+  function highlightAcrossElements(keywords, allTextNodes, kwClasses) {
     var containerMap = {};
     var containerOrder = [];
+    // 通配正则按 关键词+大小写 编译一次复用，避免每个容器重复 new RegExp
+    var wildCache = {};
 
     var blockTags = {
       'P':1,'DIV':1,'SECTION':1,'ARTICLE':1,'MAIN':1,'ASIDE':1,'HEADER':1,'FOOTER':1,'NAV':1,
@@ -544,17 +642,19 @@
       var allMatches = [];
       for (var ki = 0; ki < keywords.length; ki++) {
         var kw = keywords[ki];
-        // 每个关键词只解析一次，同一关键词的所有 match 共享同一个样式对象
-        var kwStyle = StyleKit.resolveStyle(kw, currentSettings);
+        var kwCls = kwClasses ? kwClasses[ki] : styleClassFor(StyleKit.resolveStyle(kw, currentSettings));
         try {
           var matches;
           if (kw.matchType === 'wildcard') {
-            var wildPat = kw.text
-              .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-              .replace(/\*/g, '[\\s\\S]*?')
-              .replace(/\?/g, '[\\s\\S]');
-            var wildFlags = kw.caseSensitive ? 'g' : 'gi';
-            var wildRegex = new RegExp(wildPat, wildFlags);
+            var wkey = kw.text + '\x00' + (kw.caseSensitive ? '1' : '0');
+            var wildRegex = wildCache[wkey];
+            if (!wildRegex) {
+              var wildPat = kw.text
+                .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+                .replace(/\*/g, '[\\s\\S]*?')
+                .replace(/\?/g, '[\\s\\S]');
+              wildRegex = wildCache[wkey] = new RegExp(wildPat, kw.caseSensitive ? 'g' : 'gi');
+            }
             matches = [];
             var m;
             wildRegex.lastIndex = 0;
@@ -567,7 +667,7 @@
           }
           for (var mi = 0; mi < matches.length; mi++) {
             matches[mi].keywordId = kw.id || '__temp__';
-            matches[mi].kwStyle = kwStyle;
+            matches[mi].kwCls = kwCls;
             matches[mi].keywordText = kw.text;
             matches[mi].showRail = kw.showRail !== false;
             matches[mi].exclusive = kw.exclusive === true;
@@ -658,20 +758,25 @@
     if (nearNodes.length === 0) return;
 
     isLazyHighlighting = true;
-    lazyHighlightBatch(normalKws, nearNodes, 0);
+    lazyHighlightBatch(normalKws, nearNodes, 0, buildKwClasses(normalKws), buildQuickFilter(normalKws));
   }
 
-  function lazyHighlightBatch(keywords, nodes, startIdx) {
+  function lazyHighlightBatch(keywords, nodes, startIdx, kwClasses, quick) {
     if (!isLazyHighlighting) return;
 
     var end = Math.min(startIdx + BATCH_SIZE, nodes.length);
+    var deadline = performance.now() + 12;
     for (var i = startIdx; i < end; i++) {
+      if (i > startIdx && ((i - startIdx) & 31) === 31 && performance.now() > deadline) {
+        end = i;
+        break;
+      }
       var node = nodes[i];
-      if (node && node.isConnected) highlightTextNode(node, keywords);
+      if (node && node.isConnected) highlightTextNode(node, keywords, kwClasses, quick);
     }
 
     if (end < nodes.length) {
-      setTimeout(function () { lazyHighlightBatch(keywords, nodes, end); }, 0);
+      setTimeout(function () { lazyHighlightBatch(keywords, nodes, end, kwClasses, quick); }, 0);
     } else {
       isLazyHighlighting = false;
       var visChanged = applyVisibility();
@@ -721,13 +826,10 @@
       mark.dataset.ahShowRail = match.showRail ? '1' : '0';
       mark.dataset.ahExclusive = match.exclusive ? '1' : '0';
       mark.dataset.ahGlobalOrder = String(match.globalOrder);
-      mark.dataset.ahIndex = String(highlightIndex);
-      highlightIndex++;
-      if (highlightIndex > MAX_HIGHLIGHT_INDEX) highlightIndex = 0;
 
       var isTempKw = match.keywordId && match.keywordId.indexOf('tmp_') === 0;
       var matchHide = match._hide !== undefined ? match._hide : (!isTempKw && exclusiveStopOrder >= 0 && match.globalOrder !== exclusiveStopOrder);
-      StyleKit.applyToElement(mark, styleForMatch(match), matchHide);
+      mark.className = matchHide ? classForMatch(match) + ' ah-hidden' : classForMatch(match);
       mark.dataset.ahHidden = matchHide ? 'true' : '';
       fragment.appendChild(mark);
       if (afterText) fragment.appendChild(document.createTextNode(afterText));
@@ -958,12 +1060,9 @@
           var parent = node.parentNode;
           if (!parent) return NodeFilter.FILTER_REJECT;
           if (parent.tagName === 'AH-MARK') return NodeFilter.FILTER_REJECT;
+          // 只查直接父级：祖先级 display:none 的检测（每节点×深度的 getComputedStyle）
+          // 成本远超收益；漏掉的隐藏区在显示时会直接呈现高亮，行为可接受
           if (isHidden(parent)) return NodeFilter.FILTER_REJECT;
-          var p = parent.parentElement;
-          while (p && p !== root && p !== docRoot) {
-            if (isHidden(p)) return NodeFilter.FILTER_REJECT;
-            p = p.parentElement;
-          }
           return NodeFilter.FILTER_ACCEPT;
         }
       });
@@ -986,6 +1085,41 @@
     }
 
     return nodes;
+  }
+
+  /** 批处理入口：预注册每个关键词的样式类（索引与 keywords 对齐），循环里只查数组 */
+  function buildKwClasses(keywords) {
+    var classes = new Array(keywords.length);
+    for (var i = 0; i < keywords.length; i++) {
+      classes[i] = styleClassFor(StyleKit.resolveStyle(keywords[i], currentSettings));
+    }
+    return classes;
+  }
+
+  /**
+   * 合并快筛：把 contains/exact 关键词拼成一个 alternation 正则，对节点文本先测一次；
+   * 不命中即可跳过全部这批词（regex/wildcard 不参与，仍逐词跑）。
+   * 统一加 i 令快筛只会误报不会漏报，误报由后续精确匹配兜住。
+   */
+  function buildQuickFilter(keywords) {
+    var parts = [];
+    var plain = new Array(keywords.length);
+    for (var i = 0; i < keywords.length; i++) {
+      var kw = keywords[i];
+      var mt = kw.matchType || 'contains';
+      if ((mt === 'contains' || mt === 'exact') && kw.text) {
+        parts.push(String(kw.text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+        plain[i] = true;
+      } else {
+        plain[i] = false;
+      }
+    }
+    if (parts.length < 3) return null;
+    try {
+      return { re: new RegExp(parts.join('|'), 'i'), plain: plain };
+    } catch (e) {
+      return null;
+    }
   }
 
   function getActiveKeywords() {
@@ -1011,18 +1145,21 @@
     return keywords;
   }
 
-  function highlightTextNode(textNode, keywords) {
+  function highlightTextNode(textNode, keywords, kwClasses, quick) {
     var text = textNode.textContent;
     var allMatches = [];
+    // 合并快筛：一次 alternation 正则测完全部 contains/exact 词，不命中整批跳过
+    var quickHit = quick ? quick.re.test(text) : true;
     for (var i = 0; i < keywords.length; i++) {
+      if (quick && quick.plain[i] && !quickHit) continue;
       var kw = keywords[i];
-      // 每个关键词只解析一次，同一关键词的所有 match 共享同一个样式对象
-      var kwStyle = StyleKit.resolveStyle(kw, currentSettings);
+      // 样式类由批处理入口预注册（kwClasses 与 keywords 索引对齐），这里只引用
+      var kwCls = kwClasses ? kwClasses[i] : styleClassFor(StyleKit.resolveStyle(kw, currentSettings));
       try {
         var matches = Matcher.getMatches(text, kw.text, kw.matchType, kw.caseSensitive);
         for (var j = 0; j < matches.length; j++) {
           matches[j].keywordId = kw.id || '__temp__';
-          matches[j].kwStyle = kwStyle;
+          matches[j].kwCls = kwCls;
           matches[j].keywordText = kw.text;
           matches[j].showRail = kw.showRail !== false;
           matches[j].exclusive = kw.exclusive === true;
@@ -1065,13 +1202,8 @@
       mark.dataset.ahShowRail = match.showRail ? '1' : '0';
       mark.dataset.ahExclusive = match.exclusive ? '1' : '0';
       mark.dataset.ahGlobalOrder = String(match.globalOrder);
-      mark.dataset.ahIndex = String(highlightIndex);
-      highlightIndex++;
-      if (highlightIndex > MAX_HIGHLIGHT_INDEX) highlightIndex = 0;
-
-      // 隐藏态走 .ah-hidden class（content.css 里 !important 覆盖全部样式属性），
-      // 避免「隐藏后字号仍撑开行高」这类残留
-      StyleKit.applyToElement(mark, styleForMatch(match), match._hide);
+      // 样式走 class（规则在 <style> 里统一注入），隐藏态叠加 .ah-hidden
+      mark.className = match._hide ? classForMatch(match) + ' ah-hidden' : classForMatch(match);
       mark.dataset.ahHidden = match._hide ? 'true' : '';
 
       fragment.appendChild(mark);
@@ -1111,11 +1243,14 @@
     return null;
   }
 
-  /** 兜底：match 上没带样式对象时（跨元素匹配等边界路径）现算一次 */
-  function styleForMatch(match) {
-    if (match && match.kwStyle) return match.kwStyle;
-    if (match && match.keywordId) return getStyleForKeywordId(match.keywordId);
-    return StyleKit.getDefaultStyle(currentSettings);
+  /** 兜底：match 上没带样式类时（跨元素匹配等边界路径）现注册一次 */
+  function classForMatch(match) {
+    if (match && match.kwCls) return match.kwCls;
+    if (match && match.keywordId) {
+      var kw = findKeywordById(match.keywordId);
+      if (kw) return styleClassFor(StyleKit.resolveStyle(kw, currentSettings));
+    }
+    return styleClassFor(StyleKit.getDefaultStyle(currentSettings));
   }
 
   function applyVisibility() {
@@ -1131,31 +1266,18 @@
       var isHiddenByExclusive = !isTempKw && exclusiveStopOrder >= 0 && !isNaN(order) && order !== exclusiveStopOrder;
       var isManuallyHidden = hiddenKwIds.indexOf(kwId) >= 0;
 
-      if (isManuallyHidden && !isManuallyShown) {
+      var shouldHide = (isManuallyHidden && !isManuallyShown) || (isHiddenByExclusive && !isManuallyShown);
+      if (shouldHide) {
         if (m.dataset.ahHidden !== 'true') {
-          StyleKit.applyToElement(m, null, true);
+          m.classList.add('ah-hidden');
           m.dataset.ahHidden = 'true';
           changed = true;
         }
-        continue;
-      }
-
-      if (isHiddenByExclusive && !isManuallyShown) {
-        if (m.dataset.ahHidden !== 'true') {
-          StyleKit.applyToElement(m, null, true);
-          m.dataset.ahHidden = 'true';
-          changed = true;
-        }
-        continue;
-      }
-
-      if (m.dataset.ahHidden === 'true' || isManuallyShown) {
-        var wasHidden = m.dataset.ahHidden === 'true';
+      } else if (m.dataset.ahHidden === 'true') {
+        // 样式类创建时已固定，取消隐藏只需摘掉 .ah-hidden，无需重算样式
+        m.classList.remove('ah-hidden');
         m.dataset.ahHidden = '';
-        // 走统一解析：取消隐藏时字号 / 字重 / 斜体 / 下划线会一并恢复，
-        // 不再像旧版那样只回填一个背景色
-        StyleKit.applyToElement(m, getStyleForKeywordId(kwId), false);
-        if (wasHidden) changed = true;
+        changed = true;
       }
     }
     if (changed && !isInIframe) {
@@ -1173,18 +1295,28 @@
     activeHighlight = null; isHighlighting = false;
     exclusiveStopOrder = -1;
     batchTextNodes = null;
+    batchNearBoundary = 0;
+    batchNearHookDone = false;
+    // 让在途的批处理链过期（下次 startIdx 推进时自动退出）
+    batchGeneration++;
     highlightDirty = false;
     pendingIncremental = false;
-    if (highlightIndex > MAX_HIGHLIGHT_INDEX) highlightIndex = 0;
+    invalidateElTopCache();
     var marks = getAllHighlightMarks();
     if (marks.length > 0) {
+      // 只在移除过 mark 的父节点上 normalize，不再全页合并文本节点（大页面上的隐性大开销）
+      var parents = [];
+      var seenParents = new Set();
       for (var i = 0; i < marks.length; i++) {
         var el = marks[i];
         var parent = el.parentNode;
         if (!parent) continue;
-        try { parent.replaceChild(document.createTextNode(el.textContent), el); } catch (e) {}
+        try { parent.replaceChild(document.createTextNode(el.textContent), el); } catch (e) { continue; }
+        if (!seenParents.has(parent)) { seenParents.add(parent); parents.push(parent); }
       }
-      try { document.normalize(); } catch (e) {}
+      for (var p = 0; p < parents.length; p++) {
+        try { parents[p].normalize(); } catch (e) {}
+      }
     }
     if (!isInIframe && railEl) { railEl.remove(); railEl = null; }
     invalidateKeywordMapCache();
@@ -1277,11 +1409,18 @@
   }
 
   function injectShadowStyles(shadowRoot) {
-    if (!shadowRoot || shadowRoot.querySelector('style[data-ah-style]')) return;
-    var style = document.createElement('style');
-    style.setAttribute('data-ah-style', '1');
-    style.textContent = 'ah-mark{transition:outline 0.15s}@keyframes ah-blink{0%,100%{opacity:1}50%{opacity:0.3}}ah-mark.ah-blinking{animation:ah-blink 0.3s ease-in-out 3}';
-    shadowRoot.appendChild(style);
+    if (!shadowRoot) return;
+    var el = shadowRoot.querySelector('style[data-ah-style]');
+    var ver = String(dynStyleVersion);
+    if (el && el.dataset.ahVer === ver) return;
+    if (!el) {
+      el = document.createElement('style');
+      el.setAttribute('data-ah-style', '1');
+      try { shadowRoot.appendChild(el); } catch (e) { return; }
+    }
+    // 样式类规则变化时按版本号刷新，保证 shadow root 内的 mark 也能吃到 .ah-kw-N 规则
+    el.dataset.ahVer = ver;
+    el.textContent = 'ah-mark{transition:outline 0.15s}@keyframes ah-blink{0%,100%{opacity:1}50%{opacity:0.3}}ah-mark.ah-blinking{animation:ah-blink 0.3s ease-in-out 3}' + dynCssParts.join('');
   }
 
   function observeExistingShadowRoots() {
@@ -1304,8 +1443,11 @@
     try { (document.documentElement || document.body).appendChild(railEl); } catch (e) { return; }
     renderRail();
     window.removeEventListener('resize', scheduleRailUpdate);
+    window.removeEventListener('resize', invalidateElTopCache);
     window.removeEventListener('scroll', scheduleRailUpdate, true);
     window.addEventListener('resize', scheduleRailUpdate);
+    // 窗口尺寸变化才会改变文档坐标，此时清掉位置缓存
+    window.addEventListener('resize', invalidateElTopCache);
     window.addEventListener('scroll', scheduleRailUpdate, true);
   }
 

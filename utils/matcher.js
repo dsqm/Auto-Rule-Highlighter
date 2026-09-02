@@ -49,8 +49,17 @@ var Matcher = {
       var regex;
       switch (matchType) {
         case 'contains':
-          regex = this._getCachedRegex(this._escapeRegex(keyword), flags);
-          break;
+          // 子串匹配走 indexOf，比正则快数倍；关键词巨多时是主要热点
+          var hay = caseSensitive ? text : text.toLowerCase();
+          var needle = caseSensitive ? keyword : keyword.toLowerCase();
+          var subMatches = [];
+          var from = 0;
+          var idx;
+          while ((idx = hay.indexOf(needle, from)) !== -1) {
+            subMatches.push({ start: idx, end: idx + needle.length, text: text.slice(idx, idx + needle.length) });
+            from = idx + Math.max(1, needle.length);
+          }
+          return subMatches;
         case 'exact':
           regex = this._getCachedRegex('\\b' + this._escapeRegex(keyword) + '\\b', flags);
           break;

@@ -81,15 +81,16 @@ async function getSettings() {
 }
 
 async function getMatchedRules(url) {
+  // 返回全部匹配的规则：popup 列表展示的就是所有匹配规则，
+  // 只回传第一条会导致其余规则的关键词永远不高亮
   var rules = await getRules();
-  var matched = null;
+  var matched = [];
   for (var i = 0; i < rules.length; i++) {
     if (rules[i].enabled && urlMatch(url, rules[i].urlPattern, rules[i].urlMatchType)) {
-      matched = rules[i];
-      break;
+      matched.push(rules[i]);
     }
   }
-  return matched ? [matched] : [];
+  return matched;
 }
 
 function setIconDisabled(tabId, disabled) {
