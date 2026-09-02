@@ -208,7 +208,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       </div>`;
     document.body.appendChild(overlay);
     setupModalClose(overlay);
-    var editor = mountStyleEditor(overlay.querySelector('#presetEditorBody'), stylePresets[index]);
+    var editor = mountStyleEditor(overlay.querySelector('#presetEditorBody'), stylePresets[index], undefined, { bgColor: (stylePresets[0] || {}).bgColor });
     overlay.querySelector('#presetEditCancel').addEventListener('click', function () { overlay.remove(); });
     overlay.querySelector('#presetEditSave').addEventListener('click', function () {
       var saved = editor.read();
@@ -647,8 +647,8 @@ document.addEventListener('DOMContentLoaded', async () => {
           </div>
         </div>`;
       document.body.appendChild(overlay2);
-      setupModalClose(overlay2);
-      var ed = mountStyleEditor(overlay2.querySelector('#newKwStyleBody'), StyleKit.resolveStyle(newKwStyle, currentSettings), StyleKit.keywordOverrides(newKwStyle));
+      // 样式编辑弹窗不支持点击外部关闭：调色/调字号时误点灰底会直接丢改动，必须显式取消/确定
+      var ed = mountStyleEditor(overlay2.querySelector('#newKwStyleBody'), StyleKit.resolveStyle(newKwStyle, currentSettings), StyleKit.keywordOverrides(newKwStyle), { bgColor: (stylePresets[0] || {}).bgColor });
       overlay2.querySelector('#newKwStyleCancel').addEventListener('click', function () { overlay2.remove(); });
       overlay2.querySelector('#newKwStyleSave').addEventListener('click', function () {
         newKwStyle = ed.read();
@@ -844,8 +844,8 @@ document.addEventListener('DOMContentLoaded', async () => {
           </div>
         </div>`;
       document.body.appendChild(overlay2);
-      setupModalClose(overlay2);
-      var ed = mountStyleEditor(overlay2.querySelector('#editKwStyleBody'), editStyle, StyleKit.keywordOverrides(kw));
+      // 样式编辑弹窗不支持点击外部关闭：调色/调字号时误点灰底会直接丢改动，必须显式取消/确定
+      var ed = mountStyleEditor(overlay2.querySelector('#editKwStyleBody'), editStyle, StyleKit.keywordOverrides(kw), { bgColor: (stylePresets[0] || {}).bgColor });
       overlay2.querySelector('#editStyleCancel').addEventListener('click', function () { overlay2.remove(); });
       overlay2.querySelector('#editStyleSave').addEventListener('click', function () {
         editStyle = ed.read();

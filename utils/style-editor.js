@@ -19,17 +19,23 @@
  * 第二个参数 initialStyle 是「解析后的有效样式」（决定控件显示的数值），
  * 第三个参数 overrides 是「显式设置过的字段」（决定各开关的勾选态）。
  * 不传 overrides 时退化为用 initialStyle 自身判定。
+ * 第四个参数 defaults 提供默认颜色（通常传预设第一个的 bgColor）：
+ *   勾选背景开关但未填色时，用该颜色填充，避免「开了背景却是透明的」。
  */
 var StyleEditor = (function () {
   'use strict';
 
   var FIELDS = ['bgColor', 'textColor', 'fontSize', 'bold', 'italic', 'underline', 'strike'];
 
-  function mountStyleEditor(container, initialStyle, overrides) {
+  function mountStyleEditor(container, initialStyle, overrides, defaults) {
     if (!container) return { read: function () { return {}; }, set: function () {} };
 
     var st = initialStyle || {};
     var ov = overrides || st;
+    // 勾选背景开关但无颜色时，用默认色填充（预设第一个的颜色；未传时兜底内置默认色）
+    var defaultBg = (defaults && typeof defaults.bgColor === 'string' && defaults.bgColor.charAt(0) === '#')
+      ? defaults.bgColor
+      : StyleKit.BUILTIN_DEFAULT.bgColor;
 
     container.innerHTML =
       '<div class="se-row"><span class="se-label">背景</span>' +
@@ -127,7 +133,13 @@ var StyleEditor = (function () {
     }
 
     bgToggle.addEventListener('change', function () {
-      if (!bgToggle.checked) {
+      if (bgToggle.checked) {
+        // 勾选背景但没填色：填充默认颜色，避免「开了背景却是透明的」
+        if (!bgHex.value.trim()) {
+          bgHex.value = defaultBg;
+          bgColor.value = defaultBg;
+        }
+      } else {
         // 关掉背景时，若文字开着且是反色填充而来，清空让用户重选
         bgHex.value = '';
       }

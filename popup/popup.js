@@ -48,6 +48,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var cppStyleEditor = null;
   var cppCancel = null;
   var cppApply = null;
+  var cppOpenSnapshot = '';
 
   cppPopup = document.getElementById('colorPickerPopup');
   cppStyleBody = document.getElementById('cppStyleBody');
@@ -490,8 +491,10 @@ document.addEventListener('DOMContentLoaded', function () {
       cppPopup.style.top = useTop + 'px';
     }
     // 与设置页同一套带开关的样式编辑器
-    cppStyleEditor = StyleEditor.mountStyleEditor(cppStyleBody, StyleKit.resolveStyle(style || {}, currentSettings), StyleKit.keywordOverrides(style || {}));
+    cppStyleEditor = StyleEditor.mountStyleEditor(cppStyleBody, StyleKit.resolveStyle(style || {}, currentSettings), StyleKit.keywordOverrides(style || {}), { bgColor: (stylePresets[0] || {}).bgColor });
     cppPopup.classList.add('show');
+    // 记录打开时的快照：点击面板外部时据此判断是否有未保存改动
+    try { cppOpenSnapshot = JSON.stringify(cppStyleEditor.read()); } catch (e) { cppOpenSnapshot = ''; }
   }
 
   function closeColorPicker() {
@@ -740,7 +743,16 @@ document.addEventListener('DOMContentLoaded', function () {
       closeHistoryDropdown();
     }
     if (cppPopup && cppPopup.classList.contains('show') && !cppPopup.contains(e.target) && !e.target.closest('.kw-preview') && !e.target.closest('#searchStylePreview')) {
-      closeColorPicker();
+      // 原生颜色拾色器弹出时会盖住面板底部的「应用」按钮，用户常误点面板外想关掉拾色器；
+      // 有未保存改动时不关闭面板，闪红边提示，必须显式点「应用 / 取消」，避免颜色直接丢失
+      var dirty = false;
+      try { dirty = !!cppStyleEditor && JSON.stringify(cppStyleEditor.read()) !== cppOpenSnapshot; } catch (e2) {}
+      if (dirty) {
+        cppPopup.style.boxShadow = '0 0 0 2px #ff4d4f';
+        setTimeout(function () { cppPopup.style.boxShadow = ''; }, 500);
+      } else {
+        closeColorPicker();
+      }
     }
   });
 

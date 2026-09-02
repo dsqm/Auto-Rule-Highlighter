@@ -187,18 +187,57 @@ var StyleKit = (function () {
     el.style.textDecoration = decorationOf(style);
   }
 
-  // 预览块：只有背景 -> 整块填充；只有文字色 -> 文字 + 外框；内部按 em 缩放使字号差异可见
+  // 预览块：只有背景 -> 整块填充；只有文字色 -> 文字 + 外框；只有字号 -> 纯块 + 右上角 +/− 角标
   /**
-   * 样式是否显式定义了文本样式（文字色 / 字号 / 字形）。
-   * 未设置文字颜色（undefined / null）= 保持页面原色，不算「定义了文字颜色」——
-   * 只有背景色的样式在预览中应渲染为纯色块。
+   * 样式是否显式定义了文本样式（文字色 / 字形）。
+   * 未设置文字颜色（undefined / null）= 保持页面原色，不算「定义了文字颜色」；
+   * 字号不算文本样式——只有字号差异时预览不渲染 Aa，仅以 +/− 角标表达，
+   * 否则「没调文字却出现文字」的预览会产生误导。
    */
   function styleHasText(style) {
     if (!style) return false;
     if (typeof style.textColor === 'string' && style.textColor.charAt(0) === '#') return true;
-    if (style.fontSize && style.fontSize !== 1) return true;
     if (style.bold || style.italic || style.underline || style.strike) return true;
     return false;
+  }
+
+  /** 字号角标：字号偏离 1 时在预览块右上角显示一个小圆角标（+/−），
+   *  比缩放预览文字更直观（大字号会撑爆小块、小变化又看不出来）。
+   *  做成实底小圆而非裸字符：任何底色下都清晰，视觉上也更规整。
+   *  +/− 用 CSS 渐变条绘制而非字符，避免字体度量导致的不居中。 */
+  function appendFsBadge(el, style) {
+    var fs = style && style.fontSize;
+    if (!fs || fs === 1) return;
+    var hasBg = !!style.bgColor;
+    var badge = document.createElement('span');
+    badge.style.position = 'absolute';
+    badge.style.top = '-3px';
+    badge.style.right = '-3px';
+    badge.style.width = '14px';
+    badge.style.height = '14px';
+    badge.style.boxSizing = 'border-box';
+    badge.style.borderRadius = '50%';
+    // 底圆取与预览块反色的纯色（无背景时用中性深灰），配白色描边确保分离清晰
+    var badgeBg = hasBg ? contrastColor(style.bgColor) : '#666666';
+    badge.style.backgroundColor = badgeBg;
+    badge.style.boxShadow = '0 0 0 1px rgba(255,255,255,0.9)';
+    // +/− 用绝对定位的子元素条绘制（translate 锚定圆心），避免字体度量或渐变层兼容问题
+    var barColor = badgeBg === '#ffffff' ? '#333333' : '#ffffff';
+    function bar(w, h) {
+      var b = document.createElement('span');
+      b.style.position = 'absolute';
+      b.style.left = '50%';
+      b.style.top = '50%';
+      b.style.width = w;
+      b.style.height = h;
+      b.style.transform = 'translate(-50%, -50%)';
+      b.style.backgroundColor = barColor;
+      b.style.borderRadius = '1px';
+      return b;
+    }
+    badge.appendChild(bar('6px', '1.5px'));
+    if (fs > 1) badge.appendChild(bar('1.5px', '6px'));
+    el.appendChild(badge);
   }
 
   function renderPreview(el, style, w, h) {
@@ -209,34 +248,39 @@ var StyleKit = (function () {
     el.style.justifyContent = 'center';
     el.style.flexShrink = '0';
     el.style.lineHeight = '1';
-    el.style.overflow = 'hidden';
+    // 角标挂在预览块外沿，不能被裁掉
+    el.style.overflow = 'visible';
     el.style.borderRadius = '4px';
     el.style.width = w + 'px';
     el.style.height = h + 'px';
+    el.style.position = 'relative';
 
     var hasBg = !!style.bgColor;
     el.style.backgroundColor = hasBg ? style.bgColor : 'transparent';
     el.style.border = hasBg ? 'none' : '1px solid #d0d0d0';
 
-    // 未定义任何文本样式：只显示背景色（或透明边框占位），不渲染文字
-    if (!styleHasText(style)) {
-      el.textContent = '';
-      return;
+    el.innerHTML = '';
+
+    // 只有字号差异不渲染 Aa（字号不算文本样式），仅以右上角 +/− 角标表达；
+    // 其余无文本样式的情况：只显示背景色（或透明边框占位）
+    if (styleHasText(style)) {
+      var textEl = document.createElement('span');
+      textEl.textContent = 'Aa';
+      // 文字固定基准大小，字号变化交给右上角角标表达
+      textEl.style.fontSize = Math.max(9, Math.round(h * 0.46)) + 'px';
+      textEl.style.fontWeight = style.bold ? '700' : '400';
+      textEl.style.fontStyle = style.italic ? 'italic' : 'normal';
+      textEl.style.textDecoration = decorationOf(style) || 'none';
+
+      // 预览块没有「页面原色」可继承，回退为对背景的反色或中性深色
+      var tc = style.textColor;
+      if (tc !== 'inherit' && (!tc || tc.charAt(0) !== '#')) tc = null;
+      if (!tc) tc = hasBg ? contrastColor(style.bgColor) : '#333333';
+      textEl.style.color = tc;
+      el.appendChild(textEl);
     }
 
-    var base = Math.max(9, Math.round(h * 0.46));
-    el.style.fontSize = Math.max(9, Math.round(base * (style.fontSize || 1))) + 'px';
-    el.style.fontWeight = style.bold ? '700' : '400';
-    el.style.fontStyle = style.italic ? 'italic' : 'normal';
-    el.style.textDecoration = decorationOf(style) || 'none';
-
-    // 预览块没有「页面原色」可继承，回退为对背景的反色或中性深色
-    var tc = style.textColor;
-    if (tc !== 'inherit' && (!tc || tc.charAt(0) !== '#')) tc = null;
-    if (!tc) tc = hasBg ? contrastColor(style.bgColor) : '#333333';
-    el.style.color = tc;
-
-    el.textContent = 'Aa';
+    appendFsBadge(el, style);
   }
 
   function makePreview(style, w, h) {
@@ -247,7 +291,8 @@ var StyleKit = (function () {
 
   /**
    * 预设圆点：圆形造型，与「当前样式方形预览」区分。
-   * 有文本样式的预设显示 Aa，只有背景色的显示纯色圆点。
+   * 有文本样式（文字色/字形）的预设显示 Aa，只有背景色的显示纯色圆点；
+   * 只有字号差异的同样不渲染 Aa，仅以右上角 +/- 角标表达（与方形预览一致）。
    */
   function renderPresetDot(el, style, size) {
     if (!el) return;
@@ -260,25 +305,32 @@ var StyleKit = (function () {
     el.style.justifyContent = 'center';
     el.style.flexShrink = '0';
     el.style.lineHeight = '1';
-    el.style.overflow = 'hidden';
+    // 文字不再随字号缩放，放开裁剪以露出右上角字号角标
+    el.style.overflow = 'visible';
+    el.style.position = 'relative';
 
     var hasBg = !!style.bgColor;
     el.style.background = hasBg ? style.bgColor : 'transparent';
     el.style.border = hasBg ? 'none' : '1px solid #d0d0d0';
 
-    if (!styleHasText(style)) {
-      el.textContent = '';
-      return;
+    el.innerHTML = '';
+
+    if (styleHasText(style)) {
+      var textEl = document.createElement('span');
+      textEl.textContent = 'Aa';
+      // 文字固定基准大小，字号变化交给右上角角标表达
+      textEl.style.fontSize = Math.max(8, Math.round(size * 0.42)) + 'px';
+      textEl.style.fontWeight = style.bold ? '700' : '400';
+      textEl.style.fontStyle = style.italic ? 'italic' : 'normal';
+      textEl.style.textDecoration = decorationOf(style) || 'none';
+      var tc = (typeof style.textColor === 'string' && style.textColor.charAt(0) === '#')
+        ? style.textColor
+        : (hasBg ? contrastColor(style.bgColor) : '#333333');
+      textEl.style.color = tc;
+      el.appendChild(textEl);
     }
-    el.style.fontSize = Math.max(8, Math.round(size * 0.42 * (style.fontSize || 1))) + 'px';
-    el.style.fontWeight = style.bold ? '700' : '400';
-    el.style.fontStyle = style.italic ? 'italic' : 'normal';
-    el.style.textDecoration = decorationOf(style) || 'none';
-    var tc = (typeof style.textColor === 'string' && style.textColor.charAt(0) === '#')
-      ? style.textColor
-      : (hasBg ? contrastColor(style.bgColor) : '#333333');
-    el.style.color = tc;
-    el.textContent = 'Aa';
+
+    appendFsBadge(el, style);
   }
 
   function styleEquals(a, b) {
