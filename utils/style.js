@@ -164,10 +164,16 @@ var StyleKit = (function () {
     return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.5 ? '#000000' : '#ffffff';
   }
 
-  // 文字颜色：'#xxx'=自定义；null=自动反色（按背景亮度取黑/白）；其余（undefined/'inherit'）= 保持页面原色
-  function resolveTextColor(style) {
+  // 文字颜色统一解析（真实渲染与预览共用）：
+  //   '#xxx'                       → 自定义色
+  //   null                         → 自动反色（按背景亮度取黑/白）
+  //   undefined/'inherit'          → 保持页面原色
+  //   previewFallback 传入时预览模式：页面原色无处可继承，改为「有背景 → 背景对比色；无背景 → 传入回退色」
+  function resolveTextColor(style, previewFallback) {
     if (typeof style.textColor === 'string' && style.textColor.charAt(0) === '#') return style.textColor;
-    if (style.textColor === null) return contrastColor(style.bgColor);
+    if (style.textColor === null || typeof previewFallback === 'string') {
+      return style.bgColor ? contrastColor(style.bgColor) : (typeof previewFallback === 'string' ? previewFallback : '#000000');
+    }
     return 'inherit';
   }
 
@@ -261,12 +267,9 @@ var StyleKit = (function () {
     el.appendChild(badge);
   }
 
-  /** 自动反色预览色：A 用按背景取出的黑/白（自动反色结果），a 用相反色 */
-  function autoInvertPair(style, hasBg, fallback) {
-    var main;
-    if (typeof style.textColor === 'string' && style.textColor.charAt(0) === '#') main = style.textColor;
-    else main = hasBg ? contrastColor(style.bgColor) : fallback;
-    // 只有自动反色（textColor === null）才双色；其余一律同色（保持原色回退色也是单色）
+  // 预览双色：main = 解析出的预览文字色；自动反色（textColor === null）时 alt = main 的黑白相反色
+  function autoInvertPair(style, fallback) {
+    var main = resolveTextColor(style, fallback);
     if (style.textColor !== null) return { main: main, alt: main };
     return { main: main, alt: main === '#ffffff' ? '#000000' : '#ffffff' };
   }
@@ -296,7 +299,7 @@ var StyleKit = (function () {
     // 其余无文本样式的情况：只显示背景色（或透明边框占位）
     if (styleHasText(style)) {
       // 预览块没有「页面原色」可继承，回退为对背景的反色或中性深色
-      var colors = autoInvertPair(style, hasBg, '#333333');
+      var colors = autoInvertPair(style, '#333333');
       var wrap = document.createElement('span');
       wrap.style.fontSize = Math.max(9, Math.round(h * 0.46)) + 'px';
       wrap.style.fontWeight = style.bold ? '700' : '400';
@@ -350,7 +353,7 @@ var StyleKit = (function () {
     el.innerHTML = '';
 
     if (styleHasText(style)) {
-      var colors = autoInvertPair(style, hasBg, '#333333');
+      var colors = autoInvertPair(style, '#333333');
       var wrap = document.createElement('span');
       // 文字固定基准大小，字号变化交给右上角角标表达
       wrap.style.fontSize = Math.max(8, Math.round(size * 0.42)) + 'px';
