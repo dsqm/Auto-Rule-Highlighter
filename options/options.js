@@ -505,7 +505,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             <input type="text" id="kwText" placeholder="输入关键词" style="flex:1;min-width:120px;padding:6px 10px;border:1px solid #d9d9d9;border-radius:4px;font-size:13px;outline:none;">
             <button class="btn btn-primary btn-sm" id="kwAddBtn">添加</button>
           </div>
-          <!-- 共享样式选项栏（mountStyleBar）：匹配类型 + Aa/↔ + 右边栏/独占 + 当前样式方块 + 预设圆 -->
+          <!-- 共享样式选项栏（mountStyleBar）：匹配类型 + Aa/↔ + 右边栏/匹配即停 + 当前样式方块 + 预设圆 -->
           <div id="kwStyleBar"></div>
         </div>
         <div style="margin-bottom:8px;font-size:12px;color:#999;">已有 <span id="kwCountBadge">${(rule.keywords || []).length}</span> 个关键词</div>
@@ -518,7 +518,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     `;
     document.body.appendChild(overlay);
 
-    // 共享样式选项栏（与 popup 搜索区同组件）——匹配类型 / Aa / ↔ / 右边栏 / 独占 / 当前样式方块 / 预设圆
+    // 共享样式选项栏（与 popup 搜索区同组件）——匹配类型 / Aa / ↔ / 右边栏 / 匹配即停 / 当前样式方块 / 预设圆
     var kwStyleBar = StyleEditor.mountStyleBar(overlay.querySelector('#kwStyleBar'), {
       presets: stylePresets,
       settings: currentSettings,
@@ -557,7 +557,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             ${kw.caseSensitive ? '<span style="font-size:10px;color:#fa8c16;font-weight:600;">Aa</span>' : ''}
             ${kw.acrossElements ? '<span style="font-size:10px;color:#1890ff;font-weight:600;">↔</span>' : ''}
             ${kw.showRail !== false ? '<span style="font-size:10px;color:#52c41a;">📍</span>' : ''}
-            ${kw.exclusive ? '<span style="font-size:10px;" title="匹配后独占高亮：出现后隐藏其他关键词">⭐</span>' : ''}
+            ${kw.exclusive ? '<span style="font-size:10px;" title="匹配即停：匹配到该词后，其后方关键词停止高亮">⭐</span>' : ''}
             <label style="font-size:10px;display:flex;align-items:center;gap:2px;cursor:pointer;">
               <input type="checkbox" ${kw.enabled ? 'checked' : ''} data-kw-toggle="${kw.id}" style="width:auto;">
               启用
@@ -690,7 +690,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         </div>
         <div class="form-group">
           <label>匹配方式与样式</label>
-          <!-- 共享样式选项栏（mountStyleBar）：匹配类型 + Aa/↔ + 右边栏/独占 + 当前样式方块 + 预设圆 -->
+          <!-- 共享样式选项栏（mountStyleBar）：匹配类型 + Aa/↔ + 右边栏/匹配即停 + 当前样式方块 + 预设圆 -->
           <div id="editKwStyleBar"></div>
         </div>
         <div class="modal-actions">
@@ -864,7 +864,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             ${kw.caseSensitive ? '<span style="font-size:10px;color:#fa8c16;font-weight:600;">Aa</span>' : ''}
             ${kw.acrossElements ? '<span style="font-size:10px;color:#1890ff;font-weight:600;">↔</span>' : ''}
             ${kw.showRail !== false ? '<span style="font-size:10px;color:#52c41a;">📍</span>' : ''}
-            ${kw.exclusive ? '<span style="font-size:10px;" title="匹配后独占高亮：出现后隐藏其他关键词">⭐</span>' : ''}
+            ${kw.exclusive ? '<span style="font-size:10px;" title="匹配即停：匹配到该词后，其后方关键词停止高亮">⭐</span>' : ''}
             <label style="font-size:10px;display:flex;align-items:center;gap:2px;cursor:pointer;">
               <input type="checkbox" ${kw.enabled ? 'checked' : ''} data-kw-toggle="${kw.id}" style="width:auto;">
               启用

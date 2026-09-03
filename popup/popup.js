@@ -238,7 +238,7 @@ document.addEventListener('DOMContentLoaded', function () {
     tempList.innerHTML = tempKeywords.map(function (kw) {
       var isExclusive = kwExclusive[kw.id] || kw.exclusive || false;
       var isManuallyHidden = hiddenKwIds.has(kw.id);
-      var exclusiveIcon = isExclusive ? '<span class="kw-exclusive-icon" title="独占高亮">⭐</span>' : '';
+      var exclusiveIcon = isExclusive ? '<span class="kw-exclusive-icon" title="匹配即停">⭐</span>' : '';
       var kwCount = highlightCounts[kw.id] || 0;
       var kwCase = kw.caseSensitive || false;
       var kwAcross = kw.acrossElements || false;
@@ -356,7 +356,7 @@ document.addEventListener('DOMContentLoaded', function () {
       var isManuallyShown = manualShowKwIds.has(kw.id);
       var isManuallyHidden = hiddenKwIds.has(kw.id);
       var isEffectivelyHidden = isManuallyHidden || (kw.isHiddenByExclusive && !isManuallyShown);
-      var exclusiveIcon = kw.isExclusive ? '<span class="kw-exclusive-icon" title="独占高亮">⭐</span>' : '';
+      var exclusiveIcon = kw.isExclusive ? '<span class="kw-exclusive-icon" title="匹配即停">⭐</span>' : '';
 
       var statusClass = '';
       if (kw.isHiddenByExclusive && !isManuallyShown) {
