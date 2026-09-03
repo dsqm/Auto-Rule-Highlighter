@@ -507,6 +507,7 @@ var StyleKit = (function () {
     resolveStyle: resolveStyle,
     contrastColor: contrastColor,
     resolveTextColor: resolveTextColor,
+    autoInvertPair: autoInvertPair,
     decorationOf: decorationOf,
     applyToElement: applyToElement,
     renderPreview: renderPreview,

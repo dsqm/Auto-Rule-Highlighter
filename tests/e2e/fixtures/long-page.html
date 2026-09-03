@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>E2E 长页面（右侧栏）</title>
+</head>
+<body>
+  <h1>长页面 - 右侧栏滚动标记</h1>
+  <script>
+    // 生成足够长的内容，确保出现滚动条
+    for (var i = 0; i < 40; i++) {
+      var p = document.createElement('p');
+      p.textContent = '滚动段落 ' + i + '：包含 发货通知 关键字，用于撑高页面并触发右侧栏标记。';
+      document.body.appendChild(p);
+    }
+  </script>
+</body>
+</html>

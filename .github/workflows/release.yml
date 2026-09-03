@@ -84,7 +84,8 @@ jobs:
           git archive --format=zip --prefix="${ROOT_DIR}/" -o "$ZIP_NAME" HEAD \
             ":(exclude).github" \
             ":(exclude).gitattributes" \
-            ":(exclude).gitignore"
+            ":(exclude).gitignore" \
+            ":(exclude)tests"
 
           echo "name=${ZIP_NAME}" >> "$GITHUB_OUTPUT"
           echo "### 打包结果" >> "$GITHUB_STEP_SUMMARY"
