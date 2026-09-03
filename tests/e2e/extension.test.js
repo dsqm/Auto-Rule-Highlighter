@@ -167,6 +167,35 @@ describe('E2E：独占高亮（exclusive）', () => {
     }
     await page.close();
   }, 30000);
+
+  it('独占关键词点击后才动态出现：初始普通词可见，插入后被清除', async () => {
+    // 场景：独占词(0, exclusive) 初始不在 DOM，点击按钮后才插入（模拟翻页/加载更多）
+    // 初始只有普通词 → 高亮可见；独占词插入后 → 普通词(order 1 > 0) 被清除
+    await injectRules(host, [
+      rule('独占规则-动态加载', '127.0.0.1', [
+        kw('独占词', { exclusive: true }),
+        kw('普通词', {})
+      ])
+    ]);
+    const page = await NEW_PAGE(`${ctx.baseUrl}/dynamic-page.html`);
+    // 初始：普通词高亮且未被隐藏
+    await page.waitForFunction(() => {
+      const m = [...document.querySelectorAll('ah-mark')].find((e) => e.textContent === '普通词');
+      return m && !m.classList.contains('ah-hidden');
+    }, { timeout: 15000 });
+
+    // 点击按钮，独占词动态插入页面
+    await page.click('#loadBtn');
+
+    // 插入后：独占词高亮可见，普通词被独占清除
+    await page.waitForFunction(() => {
+      const marks = [...document.querySelectorAll('ah-mark')];
+      const exc = marks.find((e) => e.textContent === '独占词');
+      const nor = marks.find((e) => e.textContent === '普通词');
+      return exc && !exc.classList.contains('ah-hidden') && nor && nor.classList.contains('ah-hidden');
+    }, { timeout: 15000 });
+    await page.close();
+  }, 30000);
 });
 
 describe('E2E：右侧栏滚动标记（rail）', () => {

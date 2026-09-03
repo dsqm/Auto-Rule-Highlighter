@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>E2E 动态加载独占词测试页</title>
+</head>
+<body>
+  <h1>动态加载测试页</h1>
+  <!-- 场景：独占关键词初始不在 DOM（模拟点击按钮/翻页后加载），之后动态插入。
+       规则顺序 [独占词(0, exclusive), 普通词(1)]：初始只有普通词 → 可见；
+       点击按钮插入独占词后 → 普通词应被独占清除 -->
+  <p>普通词 出现在此页面顶部。</p>
+  <button id="loadBtn" type="button">加载更多（插入独占词）</button>
+  <div id="later"></div>
+  <script>
+    document.getElementById('loadBtn').addEventListener('click', function () {
+      var p = document.createElement('p');
+      p.textContent = '独占词 动态加载出现';
+      document.getElementById('later').appendChild(p);
+    });
+  </script>
+</body>
+</html>
