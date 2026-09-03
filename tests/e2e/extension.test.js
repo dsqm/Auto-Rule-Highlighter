@@ -251,6 +251,7 @@ describe('E2E：右键菜单模拟', () => {
     const resp = await sendToTab(host, tabId, { type: 'CONTEXT_SPOT_HIGHLIGHT', text: '高亮此处' });
     expect(typeof resp).toBe('object');
     expect(resp.settings).toBeTruthy();
+    await new Promise((r) => setTimeout(r, 500)); // 等内容脚本创建 ah-spot 元素
 
     const spots = await evalMarks(page, 'ah-spot', (els) => els.map((e) => ({ text: e.textContent, id: e.dataset.ahSpotId })));
     expect(spots.length).toBeGreaterThan(0);
