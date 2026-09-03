@@ -81,16 +81,15 @@ async function getSettings() {
 }
 
 async function getMatchedRules(url) {
-  // 返回全部匹配的规则：popup 列表展示的就是所有匹配规则，
-  // 只回传第一条会导致其余规则的关键词永远不高亮
+  // 网站规则同优先级（顺序即优先级）：多条规则匹配同一网站时，只有最上方的一条生效。
+  // 高亮只下发这一条；popup 的「匹配规则」列表由 popup 自行过滤展示，不受此限制。
   var rules = await getRules();
-  var matched = [];
   for (var i = 0; i < rules.length; i++) {
     if (rules[i].enabled && urlMatch(url, rules[i].urlPattern, rules[i].urlMatchType)) {
-      matched.push(rules[i]);
+      return [rules[i]];
     }
   }
-  return matched;
+  return [];
 }
 
 function setIconDisabled(tabId, disabled) {

@@ -265,6 +265,50 @@ describe('E2E：右键菜单模拟', () => {
   }, 30000);
 });
 
+describe('E2E：多条网站规则同时匹配', () => {
+  it('两条规则都匹配同一网站时，仅最上方规则生效', async () => {
+    // 网站规则顺序即优先级：R1、R2 都匹配 http://127.0.0.1:PORT → 只应用最上方的 R1 关键词
+    await injectRules(host, [
+      rule('规则1', '127.0.0.1', [kw('加价购', {})]),
+      rule('规则2', 'http://127.0.0.1', [kw('是否含税', {})])
+    ]);
+    const page = await NEW_PAGE(`${ctx.baseUrl}/test-page.html`);
+    await openPageAndWaitMarks(page, `${ctx.baseUrl}/test-page.html`);
+    const texts = await page.$$eval('ah-mark', (els) => els.map((e) => e.textContent));
+    expect(texts).toContain('加价购');
+    expect(texts).not.toContain('是否含税'); // 第二条规则（下方）不生效
+    await page.close();
+  }, 30000);
+
+  it('R1=127.0.0.1(包含) + R2=*(通配) 同时匹配：仅最上方规则生效', async () => {
+    await injectRules(host, [
+      rule('规则1', '127.0.0.1', [kw('加价购', {})]),
+      { ...rule('规则通配', '*', [kw('是否含税', {})]), urlMatchType: 'wildcard' }
+    ]);
+    const page = await NEW_PAGE(`${ctx.baseUrl}/test-page.html`);
+    await openPageAndWaitMarks(page, `${ctx.baseUrl}/test-page.html`);
+    const texts = await page.$$eval('ah-mark', (els) => els.map((e) => e.textContent));
+    expect(texts).toContain('加价购');
+    expect(texts).not.toContain('是否含税'); // * 规则在下方，即使匹配也被最上方规则覆盖
+    await page.close();
+  }, 30000);
+
+  it('urlPattern 为 * 但匹配类型是 contains 时永不匹配（解释"只有最上方生效"现象）', async () => {
+    // R1 匹配；R2 写成 urlPattern='*' 且 urlMatchType=contains → '*' 不是任何 URL 的子串 → 永不生效
+    // 规则2：urlPattern='*' 但类型是 contains（手动改 pattern 时匹配类型仍默认 contains）
+    await injectRules(host, [
+      rule('规则1', '127.0.0.1', [kw('加价购', {})]),
+      { ...rule('规则2', '*', [kw('是否含税', {})]), urlMatchType: 'contains' }
+    ]);
+    const page = await NEW_PAGE(`${ctx.baseUrl}/test-page.html`);
+    await openPageAndWaitMarks(page, `${ctx.baseUrl}/test-page.html`);
+    const texts = await page.$$eval('ah-mark', (els) => els.map((e) => e.textContent));
+    expect(texts).toContain('加价购');
+    expect(texts).not.toContain('是否含税');
+    await page.close();
+  }, 30000);
+});
+
 describe('E2E：popup / options 冒烟', () => {
   it('popup.html 可打开且无脚本错误', async () => {
     const errors = [];
