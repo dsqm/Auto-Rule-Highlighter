@@ -186,7 +186,7 @@ describe('E2E：独占高亮（exclusive）', () => {
 
     // 点击按钮，独占词动态插入页面
     await page.click('#loadBtn');
-    await page.waitForTimeout(500); // 等扩展处理高亮
+    await new Promise((r) => setTimeout(r, 500)); // 等扩展处理高亮
 
     // 插入后：独占词高亮可见，普通词被独占清除
     await page.waitForFunction(() => {
@@ -246,7 +246,7 @@ describe('E2E：右键菜单模拟', () => {
     const selected = await selectText(page, '高亮此处');
     expect(selected).toBe(true);
 
-    const tabId = await findTabIdByUrl(host, 'http://127.0.0.1:');
+    const tabId = await findTabIdByUrl(host, page.url());
     expect(tabId).toBeTruthy();
     const resp = await sendToTab(host, tabId, { type: 'CONTEXT_SPOT_HIGHLIGHT', text: '高亮此处' });
     expect(typeof resp).toBe('object');

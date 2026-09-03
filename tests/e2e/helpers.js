@@ -60,13 +60,13 @@ export async function injectRules(extPage, rules) {
   await extPage.evaluate((r) => chrome.storage.sync.set({ ah_rules: r }), rules);
 }
 
-/** 按 URL 前缀找到 manifest 匹配的测试 tab 的 tabId */
-export async function findTabIdByUrl(extPage, urlPrefix) {
-  return extPage.evaluate(async (prefix) => {
+/** 按完整 URL 精确匹配测试 tab 的 tabId（多条同名 tab 时取最新创建的那个） */
+export async function findTabIdByUrl(extPage, url) {
+  return extPage.evaluate(async (u) => {
     const tabs = await chrome.tabs.query({});
-    const t = tabs.find((tab) => tab.url && tab.url.includes(prefix));
-    return t ? t.id : null;
-  }, urlPrefix);
+    const matched = tabs.filter((tab) => tab.url === u);
+    return matched.length ? matched[matched.length - 1].id : null;
+  }, url);
 }
 
 /** 模拟 background 的 contextMenus 消息通道：向测试 tab 发送扩展消息 */
