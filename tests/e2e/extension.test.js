@@ -186,6 +186,7 @@ describe('E2E：独占高亮（exclusive）', () => {
 
     // 点击按钮，独占词动态插入页面
     await page.click('#loadBtn');
+    await page.waitForTimeout(500); // 等扩展处理高亮
 
     // 插入后：独占词高亮可见，普通词被独占清除
     await page.waitForFunction(() => {
@@ -226,7 +227,7 @@ describe('E2E：右键菜单模拟', () => {
     expect(tabId).toBeTruthy();
     const resp = await sendToTab(host, tabId, { type: 'CONTEXT_ADD_HIGHLIGHT', text: '加急' });
     expect(resp.count).toBeGreaterThanOrEqual(1);
-    await new Promise((r) => setTimeout(r, 500));
+    await new Promise((r) => setTimeout(r, 1000)); // 等内容脚本处理完成
     const markCount = await page.$$eval('ah-mark', (els) => els.length);
     expect(markCount).toBeGreaterThan(0);
 

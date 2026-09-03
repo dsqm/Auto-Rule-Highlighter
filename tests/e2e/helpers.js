@@ -64,7 +64,7 @@ export async function injectRules(extPage, rules) {
 export async function findTabIdByUrl(extPage, urlPrefix) {
   return extPage.evaluate(async (prefix) => {
     const tabs = await chrome.tabs.query({});
-    const t = tabs.find((tab) => tab.url && tab.url.indexOf(prefix) === 0);
+    const t = tabs.find((tab) => tab.url && tab.url.includes(prefix));
     return t ? t.id : null;
   }, urlPrefix);
 }
