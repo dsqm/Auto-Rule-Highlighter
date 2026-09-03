@@ -223,7 +223,7 @@ describe('E2E：右键菜单模拟', () => {
     await page.goto(`${ctx.baseUrl}/test-page.html`, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => document.body.textContent.indexOf('加急') >= 0, { timeout: 5000 });
 
-    const tabId = await findTabIdByUrl(host, 'http://127.0.0.1:');
+    const tabId = await findTabIdByUrl(host, page.url());
     expect(tabId).toBeTruthy();
     const resp = await sendToTab(host, tabId, { type: 'CONTEXT_ADD_HIGHLIGHT', text: '加急' });
     expect(resp.count).toBeGreaterThanOrEqual(1);
