@@ -351,10 +351,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     ruleList.innerHTML = rules.map((rule, idx) => {
-      const dimmed = !rule.enabled ? 'opacity:0.5;' : '';
+      const disabledClass = !rule.enabled ? 'rule-disabled' : '';
       const kwCount = (rule.keywords || []).length;
       return `
-      <div class="rule-card" data-rule-id="${rule.id}" data-rule-index="${idx}" draggable="true" style="${dimmed}">
+      <div class="rule-card ${disabledClass}" data-rule-id="${rule.id}" data-rule-index="${idx}" draggable="true">
         <div class="rule-header">
           <span class="drag-handle" data-drag="rule" title="拖动排序">☰</span>
           <label class="toggle" title="启用规则" style="margin-right:8px;">
