@@ -22,8 +22,8 @@ jobs:
       - name: 安装 Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
+          # 无 package-lock.json（本地不安装依赖），禁用 cache: npm，否则 setup-node 因找不到 lock 文件报错
+          node-version: 24
 
       - name: 安装依赖（vitest / puppeteer）
         # 仓库未提交 package-lock.json，用 npm install（首次运行会生成）；
