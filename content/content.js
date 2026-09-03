@@ -139,7 +139,7 @@
         var isTempKw = kwId.indexOf('tmp_') === 0;
         var isManuallyShown = manualShowKwIds.indexOf(kwId) >= 0;
         var isManuallyHidden = hiddenKwIds.indexOf(kwId) >= 0;
-        var isHiddenByExclusive = !isTempKw && exclusiveStopOrder >= 0 && !isNaN(order) && order !== exclusiveStopOrder;
+        var isHiddenByExclusive = !isTempKw && exclusiveStopOrder >= 0 && !isNaN(order) && order > exclusiveStopOrder;
         if (isManuallyHidden && !isManuallyShown) continue;
         if (isHiddenByExclusive && !isManuallyShown) continue;
         if (m.dataset.ahHidden === 'true' && !isManuallyShown) continue;
@@ -676,7 +676,7 @@
 
       for (var ap = 0; ap < allMatches.length; ap++) {
         var isTempKwAp = allMatches[ap].keywordId && allMatches[ap].keywordId.indexOf('tmp_') === 0;
-        allMatches[ap]._hide = !isTempKwAp && exclusiveStopOrder >= 0 && allMatches[ap].globalOrder !== exclusiveStopOrder;
+        allMatches[ap]._hide = !isTempKwAp && exclusiveStopOrder >= 0 && allMatches[ap].globalOrder > exclusiveStopOrder;
       }
       allMatches.sort(function (a, b) {
         if (a.start !== b.start) return a.start - b.start;
@@ -826,7 +826,7 @@
       mark.dataset.ahGroupId = String(match.groupId);
 
       var isTempKw = match.keywordId && match.keywordId.indexOf('tmp_') === 0;
-      var matchHide = match._hide !== undefined ? match._hide : (!isTempKw && exclusiveStopOrder >= 0 && match.globalOrder !== exclusiveStopOrder);
+      var matchHide = match._hide !== undefined ? match._hide : (!isTempKw && exclusiveStopOrder >= 0 && match.globalOrder > exclusiveStopOrder);
       mark.className = matchHide ? classForMatch(match) + ' ah-hidden' : classForMatch(match);
       mark.dataset.ahHidden = matchHide ? 'true' : '';
       fragment.appendChild(mark);
@@ -846,7 +846,7 @@
       var isTempKw = kwId && kwId.indexOf('tmp_') === 0;
       var isManuallyShown = manualShowKwIds.indexOf(kwId) >= 0;
       var isManuallyHidden = hiddenKwIds.indexOf(kwId) >= 0;
-      var isHiddenByExclusive = !isTempKw && exclusiveStopOrder >= 0 && !isNaN(order) && order !== exclusiveStopOrder;
+      var isHiddenByExclusive = !isTempKw && exclusiveStopOrder >= 0 && !isNaN(order) && order > exclusiveStopOrder;
 
       if (isManuallyHidden && !isManuallyShown) continue;
       if (isHiddenByExclusive && !isManuallyShown) continue;
@@ -1077,7 +1077,7 @@
       var isTempKw = kwId.indexOf('tmp_') === 0;
       var isManuallyShown = manualShowKwIds.indexOf(kwId) >= 0;
       var isManuallyHidden = hiddenKwIds.indexOf(kwId) >= 0;
-      var isHiddenByExclusive = !isTempKw && exclusiveStopOrder >= 0 && !isNaN(order) && order !== exclusiveStopOrder;
+      var isHiddenByExclusive = !isTempKw && exclusiveStopOrder >= 0 && !isNaN(order) && order > exclusiveStopOrder;
       
       if (isManuallyHidden && !isManuallyShown) continue;
       if (isHiddenByExclusive && !isManuallyShown) continue;
@@ -1262,7 +1262,7 @@
     if (allMatches.length === 0) return;
     for (var p = 0; p < allMatches.length; p++) {
       var isTempKwP = allMatches[p].keywordId && allMatches[p].keywordId.indexOf('tmp_') === 0;
-      allMatches[p]._hide = !isTempKwP && exclusiveStopOrder >= 0 && allMatches[p].globalOrder !== exclusiveStopOrder;
+      allMatches[p]._hide = !isTempKwP && exclusiveStopOrder >= 0 && allMatches[p].globalOrder > exclusiveStopOrder;
     }
     allMatches.sort(function (a, b) {
       if (a.start !== b.start) return a.start - b.start;
@@ -1355,7 +1355,7 @@
       var order = parseInt(m.dataset.ahGlobalOrder, 10);
       var isTempKw = kwId && kwId.indexOf('tmp_') === 0;
       var isManuallyShown = manualShowKwIds.indexOf(kwId) >= 0;
-      var isHiddenByExclusive = !isTempKw && exclusiveStopOrder >= 0 && !isNaN(order) && order !== exclusiveStopOrder;
+      var isHiddenByExclusive = !isTempKw && exclusiveStopOrder >= 0 && !isNaN(order) && order > exclusiveStopOrder;
       var isManuallyHidden = hiddenKwIds.indexOf(kwId) >= 0;
 
       var shouldHide = (isManuallyHidden && !isManuallyShown) || (isHiddenByExclusive && !isManuallyShown);
@@ -1633,7 +1633,7 @@
       var m = allMarks[i];
       if (m.dataset.ahKeywordId !== kwId) continue;
       var order = parseInt(m.dataset.ahGlobalOrder, 10);
-      var isHiddenByExclusive = !isTempKw && exclusiveStopOrder >= 0 && !isNaN(order) && order !== exclusiveStopOrder;
+      var isHiddenByExclusive = !isTempKw && exclusiveStopOrder >= 0 && !isNaN(order) && order > exclusiveStopOrder;
       if (isManuallyHidden && !isManuallyShown) continue;
       if (isHiddenByExclusive && !isManuallyShown) continue;
       if (m.dataset.ahHidden === 'true' && !isManuallyShown) continue;

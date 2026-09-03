@@ -107,9 +107,10 @@ describe('E2E：跨元素匹配（acrossElements）', () => {
 });
 
 describe('E2E：独占高亮（exclusive）', () => {
-  it('独占关键词命中后隐藏其余规则关键词', async () => {
+  it('独占关键词命中后隐藏其后（规则顺序下方）的普通关键词', async () => {
+    // 规则顺序：[独占词(0, exclusive), 普通词(1)] → 独占在前，普通词在其后 → 普通词被隐藏
     await injectRules(host, [
-      rule('独占规则', '127.0.0.1', [
+      rule('独占规则-独占在前', '127.0.0.1', [
         kw('独占词', { exclusive: true }),
         kw('普通词', {})
       ])
@@ -127,13 +128,41 @@ describe('E2E：独占高亮（exclusive）', () => {
     const exclusiveOnes = info.filter((m) => m.exclusive === '1');
     const normalOnes = info.filter((m) => m.exclusive !== '1' && m.text === '普通词');
     expect(exclusiveOnes.length).toBeGreaterThan(0);
-    // 独占关键词可见（无 ah-hidden）
+    // 独占关键词可见
     for (const m of exclusiveOnes) expect(m.cls).not.toContain('ah-hidden');
-    // 普通关键词全部被独占隐藏
+    // 在其后的普通关键词被隐藏
     expect(normalOnes.length).toBeGreaterThan(0);
     for (const m of normalOnes) {
       expect(m.cls).toContain('ah-hidden');
       expect(m.hidden).toBe('true');
+    }
+    await page.close();
+  }, 30000);
+
+  it('独占关键词在其上方的普通关键词时，上方高亮保留不被清除', async () => {
+    // 规则顺序：[普通词(0), 独占词(1, exclusive)] → 独占在后，普通词在其上方 → 普通词保留
+    await injectRules(host, [
+      rule('独占规则-独占在后', '127.0.0.1', [
+        kw('普通词', {}),
+        kw('独占词', { exclusive: true })
+      ])
+    ]);
+    const page = await NEW_PAGE(`${ctx.baseUrl}/exclusive-page.html`);
+    await openPageAndWaitMarks(page, `${ctx.baseUrl}/exclusive-page.html`);
+
+    const info = await page.$$eval('ah-mark', (els) => els.map((e) => ({
+      text: e.textContent,
+      cls: e.className,
+      exclusive: e.dataset.ahExclusive
+    })));
+
+    const exclusiveOnes = info.filter((m) => m.exclusive === '1');
+    const normalOnes = info.filter((m) => m.exclusive !== '1' && m.text === '普通词');
+    expect(exclusiveOnes.length).toBeGreaterThan(0);
+    // 普通词位于独占关键词上方（order 更小）→ 不被清除
+    expect(normalOnes.length).toBeGreaterThan(0);
+    for (const m of normalOnes) {
+      expect(m.cls).not.toContain('ah-hidden');
     }
     await page.close();
   }, 30000);
