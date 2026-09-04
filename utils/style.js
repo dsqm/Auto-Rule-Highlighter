@@ -3,7 +3,7 @@
 var StyleKit = (function () {
   'use strict';
 
-  // 内置兜底：预设被删空时使用（textColor 用 'inherit' 保持原色，不默认自动反色）
+  // 内置兜底：预设被删空时使用（textColor 用 'inherit' 保持原色，不默认自动黑白）
   var BUILTIN_DEFAULT = {
     bgColor: '#ffeb3b',
     textColor: 'inherit',
@@ -71,7 +71,7 @@ var StyleKit = (function () {
       if (raw.id) p.id = raw.id;
     }
     if (!p.id) p.id = uid();
-    // 文字颜色：null（自动反色）/ 'inherit'（保持原色）/ '#rrggbb'；非法值归为保持原色
+    // 文字颜色：null（自动黑白）/ 'inherit'（保持原色）/ '#rrggbb'；非法值归为保持原色
     if (p.textColor !== null && p.textColor !== 'inherit') {
       if (typeof p.textColor !== 'string' || p.textColor.charAt(0) !== '#') p.textColor = 'inherit';
     }
@@ -94,7 +94,7 @@ var StyleKit = (function () {
     return normalizePreset(base);
   }
 
-  // 出厂预设：8 个背景色（文字自动反色，随背景亮度取黑/白）+ 8 个纯文字色（无背景）
+  // 出厂预设：8 个背景色（文字自动黑白，随背景亮度取黑/白）+ 8 个纯文字色（无背景）
   function getDefaultPresets() {
     return normalizePresets([
       { bgColor: '#ffeb3b', textColor: null },
@@ -167,7 +167,7 @@ var StyleKit = (function () {
 
   // 文字颜色统一解析（真实渲染与预览共用）：
   //   '#xxx'                       → 自定义色
-  //   null                         → 自动反色（按背景亮度取黑/白）
+  //   null                         → 自动黑白（按背景亮度取黑/白）
   //   undefined/'inherit'          → 保持页面原色
   //   previewFallback 传入时预览模式：页面原色无处可继承，改为「有背景 → 背景对比色；无背景 → 传入回退色」
   function resolveTextColor(style, previewFallback) {
@@ -216,7 +216,7 @@ var StyleKit = (function () {
   // 预览块：只有背景 -> 整块填充；只有文字色 -> 文字 + 外框；只有字号 -> 纯块 + 右上角 +/− 角标
   /**
    * 样式是否显式定义了文本样式（文字色 / 字形）。
-   * 自动反色（null）或自定义文字色（'#xxx'）都算「定义了文字颜色」；
+   * 自动黑白（null）或自定义文字色（'#xxx'）都算「定义了文字颜色」；
    * 未设置（undefined / 'inherit'）= 保持页面原色，不算；
    * 字号不算文本样式——只有字号差异时预览不渲染 Aa，仅以 +/− 角标表达，
    * 否则「没调文字却出现文字」的预览会产生误导。
@@ -245,7 +245,7 @@ var StyleKit = (function () {
     badge.style.height = '14px';
     badge.style.boxSizing = 'border-box';
     badge.style.borderRadius = '50%';
-    // 底圆取与预览块反色的纯色（无背景时用中性深灰），配白色描边确保分离清晰
+    // 底圆取与预览块成黑/白对比的纯色（无背景时用中性深灰），配白色描边确保分离清晰
     var badgeBg = hasBg ? contrastColor(style.bgColor) : '#666666';
     badge.style.backgroundColor = badgeBg;
     badge.style.boxShadow = '0 0 0 1px rgba(255,255,255,0.9)';
@@ -268,7 +268,7 @@ var StyleKit = (function () {
     el.appendChild(badge);
   }
 
-  // 预览双色：main = 解析出的预览文字色；自动反色（textColor === null）时 alt = main 的黑白相反色
+  // 预览双色：main = 解析出的预览文字色；自动黑白（textColor === null）时 alt = main 相反的黑/白
   function autoInvertPair(style, fallback) {
     var main = resolveTextColor(style, fallback);
     if (style.textColor !== null) return { main: main, alt: main };
@@ -299,14 +299,14 @@ var StyleKit = (function () {
     // 只有字号差异不渲染 Aa（字号不算文本样式），仅以右上角 +/− 角标表达；
     // 其余无文本样式的情况：只显示背景色（或透明边框占位）
     if (styleHasText(style)) {
-      // 预览块没有「页面原色」可继承，回退为对背景的反色或中性深色
+      // 预览块没有「页面原色」可继承，回退为按背景取的黑/白或中性深色
       var colors = autoInvertPair(style, '#333333');
       var wrap = document.createElement('span');
       wrap.style.fontSize = Math.max(9, Math.round(h * 0.46)) + 'px';
       wrap.style.fontWeight = style.bold ? '700' : '400';
       wrap.style.fontStyle = style.italic ? 'italic' : 'normal';
       wrap.style.textDecoration = decorationOf(style) || 'none';
-      // 自动反色：A/a 一黑一白（A 是反色结果、a 是相反色），一眼区分「自动反色」与固定黑色字
+      // 自动黑白：A/a 一黑一白（A 是按背景取的黑/白、a 是相反的黑/白），一眼区分「自动黑白」与固定黑色字
       var chA = document.createElement('span');
       chA.textContent = 'A';
       chA.style.color = colors.main;
@@ -361,7 +361,7 @@ var StyleKit = (function () {
       wrap.style.fontWeight = style.bold ? '700' : '400';
       wrap.style.fontStyle = style.italic ? 'italic' : 'normal';
       wrap.style.textDecoration = decorationOf(style) || 'none';
-      // 自动反色：A/a 一黑一白（A 是反色结果、a 是相反色），一眼区分「自动反色」与固定黑色字
+      // 自动黑白：A/a 一黑一白（A 是按背景取的黑/白、a 是相反的黑/白），一眼区分「自动黑白」与固定黑色字
       var chA = document.createElement('span');
       chA.textContent = 'A';
       chA.style.color = colors.main;
@@ -387,7 +387,7 @@ var StyleKit = (function () {
       } else if (k === 'bold' || k === 'italic' || k === 'underline' || k === 'strike') {
         if (!!va !== !!vb) return false;
       } else if (k === 'textColor') {
-        // 区分 null（自动反色）与 undefined/'inherit'（保持原色）
+        // 区分 null（自动黑白）与 undefined/'inherit'（保持原色）
         var na = va === undefined ? '' : (va === null ? '@auto' : (va || ''));
         var nb = vb === undefined ? '' : (vb === null ? '@auto' : (vb || ''));
         if (na !== nb) return false;
@@ -405,7 +405,7 @@ var StyleKit = (function () {
       var f = KEYWORD_FIELDS[STYLE_KEYS[i]];
       var v = kw[f];
       if (v === undefined || v === null) {
-        // textColor=null 是显式「自动反色」，不算继承；其余 null 视为未设置
+        // textColor=null 是显式「自动黑白」，不算继承；其余 null 视为未设置
         if (STYLE_KEYS[i] === 'textColor' && v === null) return false;
         continue;
       }
@@ -419,7 +419,7 @@ var StyleKit = (function () {
   // 取出对象上显式写过的样式（未显式设置的字段留 undefined）。
   // 兼容两种字段名：关键词对象用 color，样式/预设对象用 bgColor。
   // 背景色空串（透明）是有效值，保留；其余字段的空串/空值丢弃。
-  // textColor=null（自动反色）是有效值，保留。
+  // textColor=null（自动黑白）是有效值，保留。
   function keywordOverrides(kw) {
     var o = {};
     if (!kw) return o;

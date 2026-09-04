@@ -7,14 +7,14 @@
  * 语义：
  *   背景开关  开 = 自定义背景色；关 = 无背景（透明）
  *   文字开关  开 = 启用文字样式；关 = 不染色（保持页面原色）
- *             开启后可二选一：勾「自动反色」（按背景亮度取黑/白，随背景变化）
- *             或填自定义颜色；两者互斥，且自动反色复选框受文字开关控制
+ *             开启后可二选一：勾「自动黑白」（按背景亮度取黑/白，随背景变化）
+ *             或填自定义颜色；两者互斥，且自动黑白复选框受文字开关控制
  *   字号开关  开 = 自定义字号；关 = 默认字号
  *   字形 chips 独立开关（加粗 / 斜体 / 下划线 / 删除线）
  *
  * read() 返回 overrides 对象：
  *   bgColor  ''（透明）或 '#rrggbb'；关 = ''
- *   textColor null（自动反色）/ '#rrggbb'；关 = 不写入（undefined = 保持原色）
+ *   textColor null（自动黑白）/ '#rrggbb'；关 = 不写入（undefined = 保持原色）
  *   fontSize  数值；关 = 不写入
  *
  * 第二个参数 initialStyle 是「解析后的有效样式」（决定控件显示的数值），
@@ -83,7 +83,7 @@ var StyleEditor = (function () {
         '<input type="checkbox" class="se-toggle se-text-toggle">' +
         '<input type="color" class="se-text-color" value="#000000">' +
         '<input type="text" class="se-text-hex" value="" maxlength="7" placeholder="">' +
-        '<label class="se-auto-invert"><input type="checkbox" class="se-auto-invert-cb">自动反色</label>' +
+        '<label class="se-auto-invert"><input type="checkbox" class="se-auto-invert-cb">自动黑白</label>' +
       '</div>' +
       '<div class="se-row"><span class="se-label">字号</span>' +
         '<input type="checkbox" class="se-toggle se-fs-toggle">' +
@@ -112,11 +112,11 @@ var StyleEditor = (function () {
     var chipU = container.querySelector('.se-chip.u');
     var chipS = container.querySelector('.se-chip.s');
 
-    // 自动反色悬停提示（data-tip 用 JS 赋值，避免 innerHTML 把换行折叠成空格）
+    // 自动黑白悬停提示（data-tip 用 JS 赋值，避免 innerHTML 把换行折叠成空格）
     var invertLabel = container.querySelector('.se-auto-invert');
     if (invertLabel) {
       invertLabel.setAttribute('data-tip',
-        '自动反色：按背景亮度取黑/白文字。\n' +
+        '自动黑白：按背景亮度取黑/白文字。\n' +
         '亮度 = (0.299×R + 0.587×G + 0.114×B) ÷ 255\n' +
         '大于 50% 用黑字，否则用白字\n' +
         '背景变化时文字色随之更新');
@@ -127,7 +127,7 @@ var StyleEditor = (function () {
       bgColor.disabled = !bgToggle.checked;
       bgHex.disabled = !bgToggle.checked;
       var textOn = textToggle.checked;
-      // 自动反色与颜色控件互斥：勾选自动反色后颜色不可选；文字开关关时自动反色不可用
+      // 自动黑白与颜色控件互斥：勾选自动黑白后颜色不可选；文字开关关时自动黑白不可用
       var autoOn = textOn && autoInvertCb.checked;
       textColor.disabled = !textOn || autoOn;
       textHex.disabled = !textOn || autoOn;
@@ -144,7 +144,7 @@ var StyleEditor = (function () {
       bgToggle.checked = !!bg;
       bgColor.value = bg || '#ffeb3b';
       bgHex.value = bg;
-      // 文字：三态 —— '#xxx' 自定义色 / null 自动反色 / 其余（undefined/'inherit'）保持原色
+      // 文字：三态 —— '#xxx' 自定义色 / null 自动黑白 / 其余（undefined/'inherit'）保持原色
       var tcRaw = (ov.textColor !== undefined) ? ov.textColor : st.textColor;
       var tc = (typeof tcRaw === 'string' && tcRaw.charAt(0) === '#') ? tcRaw : '';
       var autoInvert = tcRaw === null;
@@ -170,7 +170,7 @@ var StyleEditor = (function () {
       var out = {};
       // 背景：关 = 透明（写入空串，显式无背景）
       out.bgColor = bgToggle.checked ? (bgHex.value.trim() || '') : '';
-      // 文字：勾选自动反色 → null（动态反色）；填色 → '#xxx'；关 = 不写入（保持页面原色）
+      // 文字：勾选自动黑白 → null（动态取黑/白）；填色 → '#xxx'；关 = 不写入（保持页面原色）
       if (textToggle.checked) {
         if (autoInvertCb.checked) out.textColor = null;
         else if (textHex.value.trim()) out.textColor = textHex.value.trim();
@@ -192,7 +192,7 @@ var StyleEditor = (function () {
           bgColor.value = defaultBg;
         }
       } else {
-        // 关掉背景时，若文字开着且是反色填充而来，清空让用户重选
+        // 关掉背景时，若文字开着且是自动黑白填充而来，清空让用户重选
         bgHex.value = '';
       }
       sync();
@@ -204,7 +204,7 @@ var StyleEditor = (function () {
       if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v)) bgColor.value = v;
     });
 
-    /** 基于当前背景色取反色，用于勾选文字开关时的自动填充 */
+    /** 基于当前背景色取黑/白，用于勾选文字开关时的自动填充 */
     function contrastFor(hex) {
       var v = hex && hex.charAt(0) === '#' ? hex : bgHex.value;
       return StyleKit.contrastColor(v);
@@ -212,7 +212,7 @@ var StyleEditor = (function () {
 
     textToggle.addEventListener('change', function () {
       if (textToggle.checked && !textHex.value.trim() && !autoInvertCb.checked) {
-        // 勾选文字但没选自动反色、也没填色：自动填充基于背景的反色，可再手动调整
+        // 勾选文字但没选自动黑白、也没填色：自动填充基于背景的黑/白，可再手动调整
         var c = contrastFor(bgHex.value.trim());
         textHex.value = c;
         textColor.value = c;
@@ -221,20 +221,20 @@ var StyleEditor = (function () {
     });
     autoInvertCb.addEventListener('change', function () {
       if (autoInvertCb.checked) {
-        // 与自定义颜色互斥：勾选自动反色时清空颜色（颜色控件由 sync 置灰）
+        // 与自定义颜色互斥：勾选自动黑白时清空颜色（颜色控件由 sync 置灰）
         textHex.value = '';
       }
       sync();
     });
     textColor.addEventListener('input', function () {
       textHex.value = textColor.value;
-      // 手动选色时取消自动反色（互斥反向）
+      // 手动选色时取消自动黑白（互斥反向）
       if (autoInvertCb.checked) { autoInvertCb.checked = false; sync(); }
     });
     textHex.addEventListener('input', function () {
       var v = textHex.value.trim();
       if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v)) textColor.value = v;
-      // 手动输入颜色时取消自动反色（互斥反向）
+      // 手动输入颜色时取消自动黑白（互斥反向）
       if (v && autoInvertCb.checked) { autoInvertCb.checked = false; sync(); }
     });
 
