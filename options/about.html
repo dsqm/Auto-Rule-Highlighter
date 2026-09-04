@@ -13,6 +13,11 @@
     a { color: #1890ff; text-decoration: none; }
     a:hover { text-decoration: underline; }
     hr { border: none; border-top: 1px solid #f0f0f0; margin: 20px 0; }
+    .support { background: #fff7e6; border: 1px solid #ffe0a3; border-radius: 6px; padding: 14px 16px; margin: 16px 0; }
+    .support .support-title { font-size: 14px; font-weight: 600; color: #ad6800; margin-bottom: 6px; }
+    .support p { margin: 4px 0; color: #7a5c1e; font-size: 13px; }
+    .support a { color: #d46b08; font-weight: 600; }
+    .support a:hover { text-decoration: underline; }
     .footer-links { margin-top: 16px; text-align: center; font-size: 13px; color: #999; }
     .footer-links a { margin: 0 8px; }
     .footer-links .sep { color: #ddd; }
@@ -21,11 +26,19 @@
 <body>
   <div class="container">
     <div class="card">
-      <h1>Auto Rule Highlighter</h1>
-      <div class="version">v1.1.0 &mdash; GPL v3</div>
+      <h1 id="ext-name">Auto Rule Highlighter</h1>
+      <div class="version">v<span id="ext-version">1.1.2</span> &mdash; GPL v3</div>
       <p>根据自定义规则自动高亮网页关键字，支持正则、通配符等多种匹配方式。</p>
 
       <p>欢迎提交 Issue 或 Pull Request 来帮助改进这个项目。</p>
+
+      <hr>
+
+      <div class="support">
+        <div class="support-title">☕ 捐赠或支持开发者</div>
+        <p>如果这个扩展对你有帮助，欢迎请作者喝杯咖啡，你的支持是持续改进的动力。</p>
+        <p><a href="https://docs.qq.com/aio/DRWtMY3FQS0ZHRGRG?p=qIniwAv5QQjaAipgIvwLF5" target="_blank" rel="noopener">前往捐赠 / 支持页面 →</a></p>
+      </div>
 
       <hr>
 
@@ -40,5 +53,6 @@
       <a href="about.html">关于</a>
     </div>
   </div>
+  <script src="about.js"></script>
 </body>
 </html>
