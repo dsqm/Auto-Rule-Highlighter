@@ -49,6 +49,17 @@
     .modal h3 { font-size: 16px; margin-bottom: 18px; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 
+    /* 捐赠提醒弹窗 */
+    .donate-modal { width: 400px; padding: 26px 26px 20px; text-align: center; position: relative; }
+    .donate-modal .donate-close { position: absolute; top: 8px; right: 10px; border: none; background: none; font-size: 20px; line-height: 1; color: #ccc; cursor: pointer; padding: 2px 6px; }
+    .donate-modal .donate-close:hover { color: #888; }
+    .donate-modal h3 { margin: 0 0 12px; font-size: 17px; }
+    .donate-modal .donate-desc { font-size: 13px; color: #666; line-height: 1.9; margin-bottom: 2px; }
+    .donate-modal .donate-desc b { color: #1890ff; font-weight: 600; }
+    .donate-modal .modal-actions { justify-content: center; margin-top: 18px; }
+    .btn-donate { background: #fa8c16; border-color: #fa8c16; color: #fff; }
+    .btn-donate:hover { background: #ffa940; border-color: #ffa940; color: #fff; }
+
     .settings-row { display: flex; align-items: center; margin-bottom: 0; gap: 12px; padding: 14px 0; border-bottom: 1px solid #f0f0f0; }
     .settings-row:last-child { border-bottom: none; padding-bottom: 0; }
     .settings-sub-row { padding-left: 152px !important; border-bottom: none; padding-top: 4px; padding-bottom: 8px; }
@@ -212,6 +223,7 @@
             <button class="btn btn-sm" id="btnImport">导入数据</button>
             <input type="file" id="importFile" accept=".json" style="display:none">
             <button class="btn btn-sm btn-danger" id="btnClearAll">清空所有</button>
+            <button class="btn btn-sm" id="btnResetDonate" title="重新开启捐赠提醒（点了「不再提示」后可在此恢复）">恢复捐赠提醒</button>
           </div>
         </div>
       </div>
@@ -237,6 +249,7 @@
   <script src="../utils/storage.js"></script>
   <script src="../utils/style.js"></script>
   <script src="../utils/style-editor.js"></script>
+  <script src="../utils/donate.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

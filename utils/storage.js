@@ -20,7 +20,11 @@ var Storage = {
     openPopupOnSpot: true,
     openPopupOnAddShortcut: true,
     openPopupOnSpotShortcut: true,
-    spotContextMenuEnabled: true
+    spotContextMenuEnabled: true,
+    // 捐赠提醒：donateDismissed = 点过「不再提示」，永久关闭；
+    // donateLastVisitAt = 点过「去看看」的时间戳，冷却期内不再弹
+    donateDismissed: false,
+    donateLastVisitAt: 0
   },
 
   _fallbackChecked: false,

@@ -328,6 +328,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     location.reload();
   });
 
+  // 点过「不再提示」后可在此把捐赠提醒重新打开（清空「已看过捐赠页」的冷却记录）
+  document.getElementById('btnResetDonate').addEventListener('click', async () => {
+    var cur = await Storage.getSettings();
+    await Storage.saveSettings(Object.assign({}, cur, { donateDismissed: false, donateLastVisitAt: 0 }));
+    if (typeof DonateKit !== 'undefined') {
+      DonateKit._reset();
+      DonateKit.start();
+    }
+    showToast('捐赠提醒已恢复');
+  });
+
   async function loadRules() {
     const rules = await Storage.getRules();
     renderRules(rules);
@@ -766,7 +777,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function notifyRulesChanged() {
     chrome.runtime.sendMessage({ type: 'RULES_CHANGED' }).catch(() => {});
+    // 规则数变化可能刚跨过捐赠提醒门槛，让计时器立刻复查一次
+    if (typeof DonateKit !== 'undefined') DonateKit.touch();
   }
+
+  // 规则达标（≥5 条网站规则 或 单网站 ≥5 个关键词）且在设置页停留满 2 秒后弹出捐赠提醒
+  if (typeof DonateKit !== 'undefined') DonateKit.start();
 
   function setupKwDragDrop(overlay, ruleId) {
     const container = overlay.querySelector('#kwListContainer');

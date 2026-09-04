@@ -2,7 +2,7 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-根据自定义规则自动高亮网页关键字的浏览器扩展，支持正则、通配符等多种匹配方式，提供右边栏标记导航和临时高亮查询。
+根据自定义规则自动高亮网页关键字的浏览器（chromium内核）扩展，支持正则、通配符等多种匹配方式
 
 ## 功能
 
@@ -60,17 +60,6 @@ https://docs.qq.com/aio/DRWtMY3FQS0ZHRGRG
 
 ## 安装
 
-### 开发者模式加载
-
-1. 克隆仓库：
-   
-   ```
-   git clone https://github.com/dsqm/Auto-Rule-Highlighter.git
-   ```
-2. 打开 Chrome/Edge 浏览器，进入 `chrome://extensions`。
-3. 开启右上角的 **开发者模式**。
-4. 点击 **加载已解压的扩展程序**，选择 `auto-rule-highlighter` 文件夹。
-
 ## 反馈与贡献
 
 欢迎参与项目改进：
@@ -114,7 +103,8 @@ auto-rule-highlighter/
 ├── utils/
 │   ├── matcher.js          # 文本匹配工具
 │   ├── storage.js          # Chrome Storage 封装
-│   └── style.js            # 样式统一解析与应用（content/options/popup 三端共用）
+│   ├── style.js            # 样式统一解析与应用（content/options/popup 三端共用）
+│   └── donate.js           # 捐赠提醒（停留计时、触发判断、弹窗）
 ├── icons/                  # 扩展图标
 └── LICENSE                 # GPL v3
 ```

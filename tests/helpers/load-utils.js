@@ -8,7 +8,7 @@ import path from 'node:path';
 const require = createRequire(import.meta.url);
 export const ROOT = path.resolve(require.resolve('../../package.json'), '..');
 
-const FILES = ['common.js', 'matcher.js', 'style.js', 'storage.js'];
+const FILES = ['common.js', 'matcher.js', 'style.js', 'storage.js', 'donate.js'];
 
 let loaded = false;
 export function loadUtils() {
@@ -26,3 +26,4 @@ export const Matcher = () => globalThis.Matcher;
 export const StyleKit = () => globalThis.StyleKit;
 export const CommonKit = () => globalThis.CommonKit;
 export const StorageFromGlobal = () => globalThis.Storage;
+export const DonateKit = () => globalThis.DonateKit;
