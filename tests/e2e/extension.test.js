@@ -1,5 +1,5 @@
 // 浏览器端到端（E2E）测试：
-// - 基础规则高亮与样式（背景色 / 自动反色 / 固定文字色）
+// - 基础规则高亮与样式（背景色 / 自动黑白 / 固定文字色）
 // - 匹配组合（大小写 / 正则 / 通配 / 跨元素）
 // - 匹配即停（exclusive）、右侧栏（rail）
 // - 右键菜单模拟（CONTEXT_ADD_HIGHLIGHT / CONTEXT_SPOT_HIGHLIGHT）
@@ -41,10 +41,10 @@ async function evalMarks(page, selector, mapper) {
 }
 
 describe('E2E：基础高亮与样式', () => {
-  it('背景色 + 自动反色 + 纯文字色 computed 样式正确', async () => {
+  it('背景色 + 自动黑白 + 纯文字色 computed 样式正确', async () => {
     await injectRules(host, [
       rule('样式规则', '127.0.0.1', [
-        kw('发货通知', { color: '#111111', textColor: null }),           // 背景 #111 → 自动反色白字
+        kw('发货通知', { color: '#111111', textColor: null }),           // 背景 #111 → 自动黑白白字
         kw('加价购', { color: '', textColor: '#c0392b' })                 // 无背景固定文字色
       ])
     ]);
@@ -59,7 +59,7 @@ describe('E2E：基础高亮与样式', () => {
 
     const auto = styles.find((s) => s.text === '发货通知');
     expect(auto.bg).toBe('rgb(17, 17, 17)');
-    expect(auto.color).toBe('rgb(255, 255, 255)'); // 自动反色：暗背景 → 白字
+    expect(auto.color).toBe('rgb(255, 255, 255)'); // 自动黑白：暗背景 → 白字
 
     const fixed = styles.find((s) => s.text === '加价购');
     expect(fixed.bg).toBe('rgba(0, 0, 0, 0)');     // 无背景

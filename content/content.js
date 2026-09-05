@@ -201,7 +201,7 @@
       // 所有片段在创建时已统一带上 spotId，无需兄弟反查
       highlightSelectedRange(spotSelText, spotStyle, spotId);
       try {
-        // 存完整样式（含自动反色等文字配置），popup 预览/编辑才能还原
+        // 存完整样式（含自动黑白等文字配置），popup 预览/编辑才能还原
         chrome.runtime.sendMessage({ type: 'STORE_SPOT_HIGHLIGHT', spotId: spotId, text: spotSelText, style: spotStyle });
       } catch (e) {}
       var spotSettingsResp = {};
@@ -227,7 +227,7 @@
       // 所有片段在创建时已统一带上 spotId，无需兄弟反查
       highlightSelectedRange(spotSelText, spotStyle, spotId);
       try {
-        // 存完整样式（含自动反色等文字配置），popup 预览/编辑才能还原
+        // 存完整样式（含自动黑白等文字配置），popup 预览/编辑才能还原
         chrome.runtime.sendMessage({ type: 'STORE_SPOT_HIGHLIGHT', spotId: spotId, text: spotSelText, style: spotStyle });
         chrome.runtime.sendMessage({ type: 'SHORTCUT_HIGHLIGHT_DONE', action: 'spot' });
       } catch (e) {}
@@ -340,7 +340,7 @@
         return;
       }
       var rules = response || [];
-      // 即使没有匹配规则也要拿设置：currentSettings 里存着预设（含自动反色），
+      // 即使没有匹配规则也要拿设置：currentSettings 里存着预设（含自动黑白），
       // 否则「高亮此处」在无规则页面上取不到预设样式
       chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, function (settings) {
         if (chrome.runtime.lastError) settings = {};
@@ -992,7 +992,7 @@
     return ALL_SPOT_COLORS[Math.floor(Math.random() * ALL_SPOT_COLORS.length)];
   }
 
-  /** spot 用完整预设：背景色 + 文字样式（含自动反色）整体取自同一个预设，
+  /** spot 用完整预设：背景色 + 文字样式（含自动黑白）整体取自同一个预设，
    *  预设全部用过才回退到扩展色（文字样式跟随全局默认） */
   function getNextSpotStyle() {
     var usedColors = collectUsedColors();
@@ -1031,7 +1031,7 @@
       var ancNs = ancEl && ancEl.namespaceURI;
       if (ancNs && ancNs !== 'http://www.w3.org/1999/xhtml') return null;
       var wrapper = document.createElement('ah-spot');
-      // 整个预设样式（背景 + 文字含自动反色）直接应用到片段
+      // 整个预设样式（背景 + 文字含自动黑白）直接应用到片段
       StyleKit.applyToElement(wrapper, style, false);
       wrapper.style.padding = '1px 0';
       // 每个片段在创建时就带上 spotId：跨父元素的多片段无法靠兄弟反查统一赋值，

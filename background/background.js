@@ -608,7 +608,7 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   if (msg.type === 'STORE_SPOT_HIGHLIGHT') {
     var tabId = (sender.tab && sender.tab.id) ? sender.tab.id : 0;
     var frameId = (sender.tab && sender.frameId !== undefined) ? sender.frameId : 0;
-    // 存完整样式（含自动反色等文字配置），popup 预览/编辑需要还原，只存背景色会丢失
+    // 存完整样式（含自动黑白等文字配置），popup 预览/编辑需要还原，只存背景色会丢失
     var st = msg.style || {};
     _bgStoreSpotHighlight(tabId, frameId, msg.spotId, {
       text: msg.text,

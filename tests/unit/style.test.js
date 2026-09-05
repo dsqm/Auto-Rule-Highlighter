@@ -4,7 +4,7 @@ import { loadUtils, StyleKit } from '../helpers/load-utils.js';
 beforeAll(loadUtils);
 const K = () => StyleKit();
 
-describe('StyleKit.contrastColor（自动反色亮度逻辑）', () => {
+describe('StyleKit.contrastColor（自动黑白亮度逻辑）', () => {
   it('亮背景 → 黑字', () => {
     expect(K().contrastColor('#ffffff')).toBe('#000000');
     expect(K().contrastColor('#ffeb3b')).toBe('#000000'); // 黄
@@ -28,7 +28,7 @@ describe('StyleKit.resolveTextColor', () => {
   it('自定义色直接返回', () => {
     expect(K().resolveTextColor({ textColor: '#c0392b', bgColor: '#fff' })).toBe('#c0392b');
   });
-  it('自动反色（null）按背景取反', () => {
+  it('自动黑白（null）按背景取反', () => {
     expect(K().resolveTextColor({ textColor: null, bgColor: '#ffffff' })).toBe('#000000');
     expect(K().resolveTextColor({ textColor: null, bgColor: '#000000' })).toBe('#ffffff');
   });
@@ -44,7 +44,7 @@ describe('StyleKit.resolveTextColor', () => {
 });
 
 describe('StyleKit.autoInvertPair（预览双色）', () => {
-  it('自动反色：A 用反色结果，a 用相反色', () => {
+  it('自动黑白：A 取黑/白结果，a 用相反色', () => {
     const pair = K().autoInvertPair({ textColor: null, bgColor: '#ffffff' }, '#333333');
     expect(pair.main).toBe('#000000');
     expect(pair.alt).toBe('#ffffff');
@@ -57,7 +57,7 @@ describe('StyleKit.autoInvertPair（预览双色）', () => {
     expect(pair.main).toBe('#c0392b');
     expect(pair.alt).toBe('#c0392b');
   });
-  it('无背景固定色不参与反色', () => {
+  it('无背景固定色不参与自动黑白', () => {
     const pair = K().autoInvertPair({ textColor: '#c0392b', bgColor: '' }, '#333333');
     expect(pair.main).toBe('#c0392b');
   });
@@ -67,7 +67,7 @@ describe('StyleKit.getDefaultPresets', () => {
   it('出厂 16 个预设', () => {
     expect(K().getDefaultPresets()).toHaveLength(16);
   });
-  it('前 8 个为背景色 + 自动反色，后 8 个为纯文字色', () => {
+  it('前 8 个为背景色 + 自动黑白，后 8 个为纯文字色', () => {
     const presets = K().getDefaultPresets();
     for (let i = 0; i < 8; i++) {
       expect(presets[i].bgColor).toMatch(/^#/);
@@ -94,7 +94,7 @@ describe('StyleKit.normalizePreset / normalizePresets', () => {
     expect(p.textColor).toBe('inherit');
     expect(p.fontSize).toBe(1);
   });
-  it('textColor null（自动反色）与 #xxx 保留', () => {
+  it('textColor null（自动黑白）与 #xxx 保留', () => {
     expect(K().normalizePreset({ bgColor: '#f00', textColor: null }).textColor).toBeNull();
     expect(K().normalizePreset({ bgColor: '#f00', textColor: '#123456' }).textColor).toBe('#123456');
   });
@@ -134,7 +134,7 @@ describe('StyleKit.resolveFrom / keywordOverrides / applyStyleToKeyword', () => 
 });
 
 describe('StyleKit.styleEquals / serialize', () => {
-  it('自动反色与固定黑色文字不等（null vs #000000）', () => {
+  it('自动黑白与固定黑色文字不等（null vs #000000）', () => {
     expect(K().styleEquals({ textColor: null, bgColor: '#fff' }, { textColor: '#000000', bgColor: '#fff' })).toBe(false);
   });
   it('相同样式相等（字号浮点容差）', () => {
@@ -150,7 +150,7 @@ describe('StyleKit.isInheriting / getDefaultStyle / clearKeywordStyle', () => {
   it('无样式字段的关键词视为跟随全局默认', () => {
     expect(K().isInheriting({})).toBe(true);
     expect(K().isInheriting({ color: '#f00' })).toBe(false);
-    expect(K().isInheriting({ textColor: null })).toBe(false); // 自动反色是显式设置
+    expect(K().isInheriting({ textColor: null })).toBe(false); // 自动黑白是显式设置
     expect(K().isInheriting({ fontSize: 1.5 })).toBe(false);
   });
   it('getDefaultStyle：取预设第一项；空列表回退内置默认', () => {

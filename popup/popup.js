@@ -436,7 +436,7 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
     if (cppTarget.isSpot) {
-      // spot 应用整个样式（背景 + 文字含自动反色），并更新本地与后台存储
+      // spot 应用整个样式（背景 + 文字含自动黑白），并更新本地与后台存储
       chrome.runtime.sendMessage({ type: 'UPDATE_SPOT_STYLE', spotId: cppTarget.spotId, style: overrides }).catch(function () {});
       var spot = spotKeywords.find(function (s) { return s.id === cppTarget.spotId; });
       if (spot) Object.assign(spot, StyleKit.keywordOverrides(overrides));
