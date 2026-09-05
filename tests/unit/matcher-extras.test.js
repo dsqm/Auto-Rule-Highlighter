@@ -41,12 +41,29 @@ describe('Matcher.getMatches（正则 / 通配 / 大小写组合）', () => {
     expect(ms.map((m) => m.start)).toEqual([0, 3, 6]);
   });
 
-  it('exact 中文关键词能命中（\b 只认 ASCII，曾导致中文精确匹配永远失效）', () => {
-    expect(M().getMatches('关键词', '关键词', 'exact', false)).toHaveLength(1);
-    expect(M().getMatches('这是一个关键词例子', '关键词', 'exact', false)).toHaveLength(1);
-    // 英文整词语义保持：foo 不命中 foobar
-    expect(M().getMatches('foobar', 'foo', 'exact', false)).toHaveLength(0);
-    expect(M().getMatches('foo bar', 'foo', 'exact', false)).toHaveLength(1);
+  it('exact 按「分语言词边界」判定整词', () => {
+    const ex = (text, kw) => M().getMatches(text, kw, 'exact', false).length;
+    // 中文整词：前后不能是汉字
+    expect(ex('功能', '功能')).toBe(1);
+    expect(ex('功能：介绍', '功能')).toBe(1);
+    expect(ex('功能建议', '功能')).toBe(0);
+    expect(ex('多功能', '功能')).toBe(0);
+    expect(ex('这是一个关键词例子', '关键词')).toBe(0);
+    // 中英交界天然是边界
+    expect(ex('测试ts', '测试')).toBe(1);
+    // 英文结尾：后面不能是英文
+    expect(ex('测试ts', '测试t')).toBe(0);
+    // 英文整词（\b 语义）
+    expect(ex('foo bar', 'foo')).toBe(1);
+    expect(ex('foobar', 'foo')).toBe(0);
+    // 开头对称：纯英文/英文开头，前面不能是英文
+    expect(ex('xtest', 'test')).toBe(0);
+    // 数字同字母：有完整性
+    expect(ex('v20', 'v2')).toBe(0);
+    expect(ex('版本23', '版本2')).toBe(0);
+    // 下划线是分隔符
+    expect(ex('my_var', 'my')).toBe(1);
+    expect(ex('myvar', 'my')).toBe(0);
   });
 
   it('wildcard 能匹配文本中的子串（不再要求整段相等）', () => {

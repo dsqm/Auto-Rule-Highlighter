@@ -147,14 +147,32 @@ var Matcher = {
   },
 
   /**
-   * 精确（整词）匹配：关键词前后都不能是 ASCII 词字符 [A-Za-z0-9_]。
-   * 等价于 \b 对 ASCII 的行为，但把中文等非 ASCII 字符视为词边界，
-   * 修复了 \b 只认 [A-Za-z0-9_]、导致中文关键词永远无法精确命中的问题。
+   * 精确（整词）匹配：按「分语言词边界」判定。
+   * 只区分两类词字符：英文/数字 [A-Za-z0-9]、汉字（CJK 基本区/扩展A/兼容表意）。
+   * 其余（中英标点、空格、下划线、假名、韩文、全角等）一律视为分隔符（边界）。
+   * 规则：关键词边缘字符的类型，决定相邻字符不能是同类型词字符——
+   *   - 边缘是英文/数字 → 相邻不能是英文/数字（英文单词完整性：foo 不命中 foobar）
+   *   - 边缘是汉字     → 相邻不能是汉字（中文词完整性：功能 不命中 功能建议）
+   * 中英交界天然是边界：测试 命中 测试ts；测试t 不命中 测试ts。
    */
-  _isAsciiWordChar(ch) {
+  _isAsciiAlnum(ch) {
     if (!ch) return false;
     var c = ch.charCodeAt(0);
-    return (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 95;
+    return (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122);
+  },
+
+  _isCjk(ch) {
+    if (!ch) return false;
+    var c = ch.charCodeAt(0);
+    return (c >= 0x4e00 && c <= 0x9fff) || (c >= 0x3400 && c <= 0x4dbf) || (c >= 0xf900 && c <= 0xfaff);
+  },
+
+  // edgeCh 是关键词边缘字符，neighbor 是相邻字符（空串 = 文本首/尾，视为边界）
+  _isExactBoundary(edgeCh, neighbor) {
+    if (!neighbor) return true;
+    if (this._isAsciiAlnum(edgeCh)) return !this._isAsciiAlnum(neighbor);
+    if (this._isCjk(edgeCh)) return !this._isCjk(neighbor);
+    return true; // 边缘字符是标点/下划线等（罕见），宽松处理为边界
   },
 
   _exactMatches(text, keyword, caseSensitive) {
@@ -164,11 +182,13 @@ var Matcher = {
     var matches = [];
     var from = 0;
     var idx;
+    var firstCh = keyword.charAt(0);
+    var lastCh = keyword.charAt(keyword.length - 1);
     while ((idx = hay.indexOf(needle, from)) !== -1) {
       var before = idx > 0 ? text.charAt(idx - 1) : '';
       var afterIdx = idx + needle.length;
       var after = afterIdx < text.length ? text.charAt(afterIdx) : '';
-      if (!this._isAsciiWordChar(before) && !this._isAsciiWordChar(after)) {
+      if (this._isExactBoundary(firstCh, before) && this._isExactBoundary(lastCh, after)) {
         matches.push({ start: idx, end: afterIdx, text: text.slice(idx, afterIdx) });
       }
       from = idx + Math.max(1, needle.length);
@@ -182,10 +202,12 @@ var Matcher = {
     var needle = caseSensitive ? keyword : keyword.toLowerCase();
     var from = 0;
     var idx;
+    var firstCh = keyword.charAt(0);
+    var lastCh = keyword.charAt(keyword.length - 1);
     while ((idx = hay.indexOf(needle, from)) !== -1) {
       var before = idx > 0 ? text.charAt(idx - 1) : '';
       var after = idx + needle.length < text.length ? text.charAt(idx + needle.length) : '';
-      if (!this._isAsciiWordChar(before) && !this._isAsciiWordChar(after)) return true;
+      if (this._isExactBoundary(firstCh, before) && this._isExactBoundary(lastCh, after)) return true;
       from = idx + Math.max(1, needle.length);
     }
     return false;
