@@ -29,10 +29,18 @@ var CommonKit = (function () {
     return prefix ? prefix + id : id;
   }
 
+  // 临时高亮生效范围的唯一校验入口，非法值一律回退 tab。
+  // background(service worker, importScripts 引入本文件)、content script、popup 共用，
+  // 不要在调用方再内联 v === 'page' || ... 式的判断
+  function normalizeTempScope(v) {
+    return (v === 'page' || v === 'tab' || v === 'global') ? v : 'tab';
+  }
+
   return {
     MATCH_TYPES: MATCH_TYPES,
     escapeHtml: escapeHtml,
     getMatchTypeLabel: getMatchTypeLabel,
-    uid: uid
+    uid: uid,
+    normalizeTempScope: normalizeTempScope
   };
 })();

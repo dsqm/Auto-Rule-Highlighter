@@ -1,3 +1,6 @@
+// 共用工具（CommonKit：uid / escapeHtml / normalizeTempScope 等）
+importScripts('../utils/common.js');
+
 var RULES_KEY = 'ah_rules';
 var SETTINGS_KEY = 'ah_settings';
 var STORAGE_MODE_KEY = 'ah_storage_mode';
@@ -53,14 +56,10 @@ var TEMP_SCOPE_TAB = 'tab';
 var TEMP_SCOPE_GLOBAL = 'global';
 var TEMP_GLOBAL_KEY = '__global__';
 
-function normalizeTempScope(v) {
-  return (v === TEMP_SCOPE_PAGE || v === TEMP_SCOPE_TAB || v === TEMP_SCOPE_GLOBAL) ? v : TEMP_SCOPE_TAB;
-}
-
 /** 每次都实时读设置：用户可能在另一个页面刚改过范围，缓存会拿到过期值 */
 async function bgGetTempScope() {
   var s = await getSettings();
-  return normalizeTempScope(s.tempScope);
+  return CommonKit.normalizeTempScope(s.tempScope);
 }
 
 function tempTabKey(scope, tabId) {

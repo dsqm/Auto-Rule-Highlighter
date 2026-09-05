@@ -1,7 +1,7 @@
 // 浏览器端到端（E2E）测试：
 // - 基础规则高亮与样式（背景色 / 自动反色 / 固定文字色）
 // - 匹配组合（大小写 / 正则 / 通配 / 跨元素）
-// - 独占高亮（exclusive）、右侧栏（rail）
+// - 匹配即停（exclusive）、右侧栏（rail）
 // - 右键菜单模拟（CONTEXT_ADD_HIGHLIGHT / CONTEXT_SPOT_HIGHLIGHT）
 // - popup / options 页冒烟
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -106,13 +106,13 @@ describe('E2E：跨元素匹配（acrossElements）', () => {
   }, 30000);
 });
 
-describe('E2E：独占高亮（exclusive）', () => {
-  it('独占在前时，其后关键词即使先在页面出现也被清除', async () => {
-    // 规则顺序：[独占词(0, exclusive), 普通词(1)]；页面中普通词位于顶部先出现、独占词在下方后出现
-    // → 普通词在其后（order 更大），仍应按规则被独占清除，与页面出现先后无关
+describe('E2E：匹配即停（exclusive）', () => {
+  it('匹配即停在前时，其后关键词即使先在页面出现也被清除', async () => {
+    // 规则顺序：[即停词(0, exclusive), 普通词(1)]；页面中普通词位于顶部先出现、即停词在下方后出现
+    // → 普通词在其后（order 更大），仍应按规则被匹配即停清除，与页面出现先后无关
     await injectRules(host, [
-      rule('独占规则-独占在前', '127.0.0.1', [
-        kw('独占词', { exclusive: true }),
+      rule('匹配即停规则-匹配即停在前', '127.0.0.1', [
+        kw('即停词', { exclusive: true }),
         kw('普通词', {})
       ])
     ]);
@@ -129,7 +129,7 @@ describe('E2E：独占高亮（exclusive）', () => {
     const exclusiveOnes = info.filter((m) => m.exclusive === '1');
     const normalOnes = info.filter((m) => m.exclusive !== '1' && m.text === '普通词');
     expect(exclusiveOnes.length).toBeGreaterThan(0);
-    // 独占关键词可见
+    // 匹配即停关键词可见
     for (const m of exclusiveOnes) expect(m.cls).not.toContain('ah-hidden');
     // 在其后的普通关键词被隐藏
     expect(normalOnes.length).toBeGreaterThan(0);
@@ -140,12 +140,12 @@ describe('E2E：独占高亮（exclusive）', () => {
     await page.close();
   }, 30000);
 
-  it('独占关键词在其上方的普通关键词时，上方高亮保留不被清除', async () => {
-    // 规则顺序：[普通词(0), 独占词(1, exclusive)] → 独占在后，普通词在其上方 → 普通词保留
+  it('匹配即停关键词在其上方的普通关键词时，上方高亮保留不被清除', async () => {
+    // 规则顺序：[普通词(0), 即停词(1, exclusive)] → 匹配即停在后，普通词在其上方 → 普通词保留
     await injectRules(host, [
-      rule('独占规则-独占在后', '127.0.0.1', [
+      rule('匹配即停规则-匹配即停在后', '127.0.0.1', [
         kw('普通词', {}),
-        kw('独占词', { exclusive: true })
+        kw('即停词', { exclusive: true })
       ])
     ]);
     const page = await NEW_PAGE(`${ctx.baseUrl}/exclusive-page.html`);
@@ -160,7 +160,7 @@ describe('E2E：独占高亮（exclusive）', () => {
     const exclusiveOnes = info.filter((m) => m.exclusive === '1');
     const normalOnes = info.filter((m) => m.exclusive !== '1' && m.text === '普通词');
     expect(exclusiveOnes.length).toBeGreaterThan(0);
-    // 普通词位于独占关键词上方（order 更小）→ 不被清除
+    // 普通词位于匹配即停关键词上方（order 更小）→ 不被清除
     expect(normalOnes.length).toBeGreaterThan(0);
     for (const m of normalOnes) {
       expect(m.cls).not.toContain('ah-hidden');
@@ -168,12 +168,12 @@ describe('E2E：独占高亮（exclusive）', () => {
     await page.close();
   }, 30000);
 
-  it('独占关键词点击后才动态出现：初始普通词可见，插入后被清除', async () => {
-    // 场景：独占词(0, exclusive) 初始不在 DOM，点击按钮后才插入（模拟翻页/加载更多）
-    // 初始只有普通词 → 高亮可见；独占词插入后 → 普通词(order 1 > 0) 被清除
+  it('匹配即停关键词点击后才动态出现：初始普通词可见，插入后被清除', async () => {
+    // 场景：即停词(0, exclusive) 初始不在 DOM，点击按钮后才插入（模拟翻页/加载更多）
+    // 初始只有普通词 → 高亮可见；即停词插入后 → 普通词(order 1 > 0) 被清除
     await injectRules(host, [
-      rule('独占规则-动态加载', '127.0.0.1', [
-        kw('独占词', { exclusive: true }),
+      rule('匹配即停规则-动态加载', '127.0.0.1', [
+        kw('即停词', { exclusive: true }),
         kw('普通词', {})
       ])
     ]);
@@ -184,14 +184,14 @@ describe('E2E：独占高亮（exclusive）', () => {
       return m && !m.classList.contains('ah-hidden');
     }, { timeout: 15000 });
 
-    // 点击按钮，独占词动态插入页面
+    // 点击按钮，即停词动态插入页面
     await page.click('#loadBtn');
     await new Promise((r) => setTimeout(r, 500)); // 等扩展处理高亮
 
-    // 插入后：独占词高亮可见，普通词被独占清除
+    // 插入后：即停词高亮可见，普通词被匹配即停清除
     await page.waitForFunction(() => {
       const marks = [...document.querySelectorAll('ah-mark')];
-      const exc = marks.find((e) => e.textContent === '独占词');
+      const exc = marks.find((e) => e.textContent === '即停词');
       const nor = marks.find((e) => e.textContent === '普通词');
       return exc && !exc.classList.contains('ah-hidden') && nor && nor.classList.contains('ah-hidden');
     }, { timeout: 15000 });
@@ -234,7 +234,7 @@ describe('E2E：右键菜单模拟', () => {
     await evalMarks(page, 'ah-mark', (els) => els.map((e) => e.textContent)).then((texts) => {
       expect(texts).toContain('加急');
     });
-    // 临时词不因独占逻辑被隐藏
+    // 临时词不因匹配即停逻辑被隐藏
     const hidden = await page.$$eval('ah-mark', (els) => els.filter((e) => e.classList.contains('ah-hidden')).map((e) => e.textContent));
     expect(hidden).not.toContain('加急');
     await page.close();

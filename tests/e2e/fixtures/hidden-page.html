@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>E2E 隐藏区域计数测试页</title>
+</head>
+<body>
+  <h1>隐藏计数测试页</h1>
+  <p>发货通知 第一处，正常可见。</p>
+  <div style="display:none">
+    <p>发货通知 第三处，位于 display:none 的折叠区域内。</p>
+  </div>
+  <p>发货通知 第二处，正常可见。</p>
+  <script>document.write(Array.from({length: 40}, (_, i) => '<p>填充段落 ' + i + '，用于把页面撑过一屏让右侧栏渲染。</p>').join(''));</script>
+</body>
+</html>
