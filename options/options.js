@@ -329,7 +329,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const text = await file.text();
       const data = JSON.parse(text);
-      if (data.rules) await Storage.saveRules(data.rules);
+      if (data.rules) await Storage.saveRules(sanitizeImportedRules(data.rules));
       if (data.settings) await Storage.saveSettings(data.settings);
       notifyRulesChanged();
       showToast('数据已导入');
@@ -338,6 +338,28 @@ document.addEventListener('DOMContentLoaded', async () => {
       showToast('导入失败：文件格式错误');
     }
   });
+
+  /**
+   * 清洗导入的规则数据。渲染时 rule.id / keyword.id 会直接拼进 HTML 属性（未转义），
+   * 正常路径 id 由 uid() 生成（字母数字安全），但导入外部 JSON 可能带恶意 id 造成存储型 XSS。
+   * 这里只校验 id 合法性，非法则重新生成；name/urlPattern/text 等文本字段渲染时已有 escapeHtml 兜底。
+   */
+  function sanitizeImportedRules(rules) {
+    if (!Array.isArray(rules)) return [];
+    var idRe = /^[A-Za-z0-9_]+$/;
+    return rules.map(function (rule) {
+      var r = Object.assign({}, rule);
+      if (typeof r.id !== 'string' || !idRe.test(r.id)) r.id = CommonKit.uid();
+      if (Array.isArray(r.keywords)) {
+        r.keywords = r.keywords.map(function (kw) {
+          var k = Object.assign({}, kw);
+          if (typeof k.id !== 'string' || !idRe.test(k.id)) k.id = CommonKit.uid();
+          return k;
+        });
+      }
+      return r;
+    });
+  }
 
   btnClearAll.addEventListener('click', async () => {
     if (!confirm('确定要清空所有规则和设置？此操作不可恢复。')) return;
