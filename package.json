@@ -1,6 +1,6 @@
 {
   "name": "auto-rule-highlighter",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "private": true,
   "description": "Auto Rule Highlighter 扩展的自动化测试（单元测试 + 浏览器端到端）",
   "type": "module",

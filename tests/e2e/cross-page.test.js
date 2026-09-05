@@ -37,21 +37,8 @@ async function waitTmpMarks(page, min = 1, timeout = 15000) {
   throw new Error(`timeout waiting tmp marks, last=${last}`);
 }
 
-/** 新建页面并挂上控制台日志收集（内容脚本的日志会出现在页面控制台） */
-let pageSeq = 0;
 async function newPage() {
-  const p = await ctx.browser.newPage();
-  const label = `P${++pageSeq}`;
-  p.on('console', (m) => {
-    const t = m.text();
-    if (t.indexOf('[AHTMP') >= 0) {
-      let u = '';
-      try { u = new URL(p.url()).pathname; } catch (e) {}
-      console.log(`[${label}${u}]`, t);
-    }
-  });
-  p.on('pageerror', (e) => console.log(`[${label}]`, 'pageerror', e.message));
-  return p;
+  return ctx.browser.newPage();
 }
 
 beforeAll(async () => {
@@ -71,13 +58,7 @@ describe('E2E：临时高亮跨网页（tab 范围）', () => {
     await page.goto(urlA, { waitUntil: 'domcontentloaded' });
     await new Promise((r) => setTimeout(r, 1500)); // 等内容脚本初始化完成
 
-    const resp = await addTempKwViaContent(page);
-    console.log('[diag] CONTEXT_ADD resp =', JSON.stringify(resp));
-    const stored = await host.evaluate(async () => {
-      const d = await chrome.storage.local.get('ah_temp_keywords');
-      return d.ah_temp_keywords || null;
-    });
-    console.log('[diag] storage =', JSON.stringify(stored));
+    await addTempKwViaContent(page);
     await waitTmpMarks(page);
 
     // 同标签页跳到另一个页面
@@ -137,8 +118,7 @@ describe('E2E：临时高亮跨网页（global 范围）', () => {
     await page.goto(urlA, { waitUntil: 'domcontentloaded' });
     await new Promise((r) => setTimeout(r, 1500));
 
-    const resp = await addTempKwViaContent(page);
-    console.log('[diag-global] CONTEXT_ADD resp =', JSON.stringify(resp));
+    await addTempKwViaContent(page);
     await waitTmpMarks(page, 1, 20000);
 
     // 另开一个全新标签页（不继承），global 范围下也应显示

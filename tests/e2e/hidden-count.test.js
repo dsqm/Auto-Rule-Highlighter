@@ -55,8 +55,6 @@ describe('E2E：隐藏区域内命中不计入计数与跳转', () => {
     await new Promise((r) => setTimeout(r, 500));
     const badge = await host.evaluate((tid) => chrome.action.getBadgeText({ tabId: tid }), tabId);
 
-    console.log('[diag] DOM marks = 3, counted =', counted, ', nav groups =', navResp.count, ', badge =', badge);
-
     // 可见命中只有 2 处：隐藏区域那处不应计数、不应可跳转、不应计入角标
     expect(counted).toBe(2);
     expect(navResp.count).toBe(2);
@@ -69,7 +67,6 @@ describe('E2E：隐藏区域内命中不计入计数与跳转', () => {
       if (!rail) return -1;
       return rail.querySelectorAll('.ah-rail-mark').length;
     });
-    console.log('[diag] rail dots =', railDots);
     expect(railDots).toBe(2);
 
     await page.close();
@@ -90,7 +87,6 @@ describe('E2E：隐藏区域内命中不计入计数与跳转', () => {
     await new Promise((r) => setTimeout(r, 800)); // 等 iframe frame 的角标上报
 
     const badge = await host.evaluate((tid) => chrome.action.getBadgeText({ tabId: tid }), tabId);
-    console.log('[diag-iframe] badge =', badge);
     expect(badge).toBe('2');
 
     await page.close();
