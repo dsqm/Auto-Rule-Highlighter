@@ -599,13 +599,6 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     });
     return false;
   }
-  if (msg.type === 'UPDATE_SPOT_COLOR') {
-    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-      if (!tabs[0]) return;
-      sendToAllFrames(tabs[0].id, { type: 'UPDATE_SPOT_COLOR', spotId: msg.spotId, color: msg.color });
-    });
-    return false;
-  }
   if (msg.type === 'SHORTCUT_HIGHLIGHT_DONE') {
     getSettings().then(function (s) {
       if (msg.action === 'add' && s.openPopupOnAddShortcut !== false) {

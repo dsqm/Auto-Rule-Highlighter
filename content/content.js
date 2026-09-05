@@ -39,7 +39,6 @@
   var matchGroupCounter = 0;
   var domOrderCache = new WeakMap();
   var domOrderCounter = 0;
-  var highlightDirty = false;
   var pendingRehighlight = false;
   var VIEWPORT_THRESHOLD = 2;
   var lazyHighlightTimer = null;
@@ -234,9 +233,6 @@
     }
     if (msg.type === 'DELETE_SPOT') {
       removeSpotHighlight(msg.spotId);
-    }
-    if (msg.type === 'UPDATE_SPOT_COLOR') {
-      updateSpotColor(msg.spotId, msg.color);
     }
     if (msg.type === 'UPDATE_SPOT_STYLE') {
       updateSpotStyle(msg.spotId, msg.style || {});
@@ -791,10 +787,6 @@
     }
   }
 
-  function buildTextNodeGroups(allTextNodes) {
-    return [];
-  }
-
   function setupLazyHighlightScroll() {
     window.removeEventListener('scroll', scheduleLazyHighlight, true);
     window.addEventListener('scroll', scheduleLazyHighlight, true);
@@ -1097,14 +1089,6 @@
       }
       parent.removeChild(el);
       try { parent.normalize(); } catch (e) {}
-    }
-  }
-
-  function updateSpotColor(spotId, color) {
-    var els = document.querySelectorAll('ah-spot[data-ah-spot-id="' + spotId + '"]');
-    for (var ui = 0; ui < els.length; ui++) {
-      els[ui].style.backgroundColor = color;
-      els[ui].style.cssText = 'background-color:' + color + ';padding:1px 0;border-radius:2px;';
     }
   }
 
@@ -1460,7 +1444,6 @@
     batchNearHookDone = false;
     // 让在途的批处理链过期（下次 startIdx 推进时自动退出）
     batchGeneration++;
-    highlightDirty = false;
     pendingIncremental = false;
     invalidateElTopCache();
     var marks = getAllHighlightMarks();
