@@ -39,6 +39,174 @@ async function saveDisabledTabs() {
   await chrome.storage.local.set({ 'ah_disabled_tabs': disabledTabs });
 }
 
+// ---- 临时高亮：按标签页持久化 ----
+// 之前临时关键词只活在内容脚本的内存里，页面一跳转就随文档一起被回收。
+// 现在数据落在后台并按 tabId 索引：内容脚本加载时主动拉取，运行中的增删改由后台广播，
+// 于是刷新 / 跳转 / 前进后退都能保留；target=_blank 的新标签页再从来源标签页继承一份副本。
+var TEMP_KEY = 'ah_temp_keywords';
+// 生效范围（设置项 settings.tempScope）：
+//   page   —— 不入库，关键词只活在内容脚本内存里，刷新/跳转即失效
+//   tab    —— key = tab_<tabId>，刷新/跳转保留，target=_blank 新标签页继承来源快照
+//   global —— key = __global__，所有标签页共用一份
+var TEMP_SCOPE_PAGE = 'page';
+var TEMP_SCOPE_TAB = 'tab';
+var TEMP_SCOPE_GLOBAL = 'global';
+var TEMP_GLOBAL_KEY = '__global__';
+
+function normalizeTempScope(v) {
+  return (v === TEMP_SCOPE_PAGE || v === TEMP_SCOPE_TAB || v === TEMP_SCOPE_GLOBAL) ? v : TEMP_SCOPE_TAB;
+}
+
+/** 每次都实时读设置：用户可能在另一个页面刚改过范围，缓存会拿到过期值 */
+async function bgGetTempScope() {
+  var s = await getSettings();
+  return normalizeTempScope(s.tempScope);
+}
+
+function tempTabKey(scope, tabId) {
+  if (scope === TEMP_SCOPE_GLOBAL) return TEMP_GLOBAL_KEY;
+  return 'tab_' + tabId;
+}
+
+async function bgGetTempMap() {
+  var d = await chrome.storage.local.get(TEMP_KEY);
+  return d[TEMP_KEY] || {};
+}
+
+async function bgGetTempState(scope, tabId) {
+  var empty = { keywords: [], hidden: [] };
+  if (scope === TEMP_SCOPE_PAGE) return empty;
+  if (scope === TEMP_SCOPE_GLOBAL) tabId = 0;
+  if (!tabId && scope !== TEMP_SCOPE_GLOBAL) return empty;
+  var map = await bgGetTempMap();
+  var entry = map[tempTabKey(scope, tabId)];
+  if (!entry) return empty;
+  return {
+    keywords: Array.isArray(entry.keywords) ? entry.keywords : [],
+    hidden: Array.isArray(entry.hidden) ? entry.hidden : []
+  };
+}
+
+async function bgSaveTempState(scope, tabId, state) {
+  if (scope === TEMP_SCOPE_PAGE) return;
+  if (scope === TEMP_SCOPE_GLOBAL) tabId = 0;
+  if (!tabId && scope !== TEMP_SCOPE_GLOBAL) return;
+  var map = await bgGetTempMap();
+  var keywords = (state && state.keywords) || [];
+  var hidden = (state && state.hidden) || [];
+  var key = tempTabKey(scope, tabId);
+  if (keywords.length === 0 && hidden.length === 0) delete map[key];
+  else map[key] = { keywords: keywords, hidden: hidden };
+  await chrome.storage.local.set({ [TEMP_KEY]: map });
+}
+
+async function bgDeleteTempState(tabId) {
+  if (!tabId) return;
+  var map = await bgGetTempMap();
+  // 只清该标签页自己的条目，全局条目（__global__）不受影响
+  var key = 'tab_' + tabId;
+  if (map[key] === undefined) return;
+  delete map[key];
+  await chrome.storage.local.set({ [TEMP_KEY]: map });
+}
+
+/**
+ * 新标签页继承：target=_blank / window.open 打开的标签页，从来源标签页复制一份临时高亮。
+ * 复制的是快照，之后两个标签页各自独立增删，互不影响。
+ * 仅「跟随标签页」需要：全局范围天然共享同一份；仅当前页面不入库，无东西可继承。
+ */
+async function bgInheritTempState(fromTabId, toTabId) {
+  if (!fromTabId || !toTabId || fromTabId === toTabId) return;
+  var scope = await bgGetTempScope();
+  if (scope !== TEMP_SCOPE_TAB) return;
+  var state = await bgGetTempState(scope, fromTabId);
+  if (state.keywords.length === 0 && state.hidden.length === 0) return;
+  await bgSaveTempState(scope, toTabId, state);
+}
+
+/** 只跨页面保留临时关键词的隐藏态；规则关键词的手动隐藏维持原行为（不跨页面保留） */
+function filterTempHiddenIds(ids) {
+  var out = [];
+  for (var i = 0; i < (ids || []).length; i++) {
+    var id = ids[i];
+    if (typeof id === 'string' && id.indexOf('tmp_') === 0 && out.indexOf(id) < 0) out.push(id);
+  }
+  return out;
+}
+
+async function bgPushTempState(scope, tabId, state, keepLocal) {
+  var payload = {
+    type: 'SYNC_TEMP_STATE',
+    keywords: state.keywords || [],
+    hiddenIds: state.hidden || [],
+    scope: scope
+  };
+  // keepLocal：只让页面改认新的生效范围，不要动它现有的关键词（切到「仅当前页面」时用）
+  if (keepLocal) payload.keepLocal = true;
+  // 全局范围下任何一个标签页的改动都要同步到所有标签页，不只是当前这一个
+  if (scope !== TEMP_SCOPE_GLOBAL) {
+    await sendToAllFrames(tabId, payload);
+    return;
+  }
+  var tabs = await chrome.tabs.query({});
+  for (var i = 0; i < tabs.length; i++) {
+    await sendToAllFrames(tabs[i].id, payload);
+  }
+}
+
+/** 「仅当前页面」范围不入库，弹窗读取时只能回到页面里逐个 frame 收集（即改动前的行为） */
+async function bgCollectTempFromFrames(tabId) {
+  var results = await queryAllFrames(tabId, { type: 'GET_TEMP_KEYWORDS' });
+  var merged = [];
+  var seen = {};
+  for (var r = 0; r < results.length; r++) {
+    var arr = results[r];
+    if (!Array.isArray(arr)) continue;
+    for (var i = 0; i < arr.length; i++) {
+      var item = arr[i];
+      // 去重 key 覆盖全部样式字段，避免同文本不同样式的临时关键词被误合并
+      var key = item.text + '|' + item.color + '|' + item.matchType +
+        '|' + (item.fontSize || 1) +
+        '|' + (item.textColor === undefined ? '' : (item.textColor === null ? '@auto' : item.textColor)) +
+        '|' + (item.bold ? '1' : '0') +
+        '|' + (item.italic ? '1' : '0') +
+        '|' + (item.underline ? '1' : '0') +
+        '|' + (item.strike ? '1' : '0');
+      if (!seen[key]) { seen[key] = true; merged.push(item); }
+    }
+  }
+  return merged;
+}
+
+/** 切换生效范围后，让已打开的页面立刻按新范围重取一份，省去手动刷新 */
+async function bgRefreshTempEverywhere() {
+  var scope = await bgGetTempScope();
+  await bgPurgeOtherScopes(scope);
+  var tabs = await chrome.tabs.query({});
+  for (var i = 0; i < tabs.length; i++) {
+    if (scope === TEMP_SCOPE_PAGE) {
+      // 切到「仅当前页面」：页面内存里的现有高亮保留不动，只把范围通知下去，刷新后自然失效
+      await sendToAllFrames(tabs[i].id, { type: 'SYNC_TEMP_STATE', scope: scope, keepLocal: true });
+      continue;
+    }
+    var state = await bgGetTempState(scope, tabs[i].id);
+    await bgPushTempState(scope, tabs[i].id, state);
+  }
+}
+
+/** 切换范围时清掉其他范围留下的条目，避免切回来时冒出上一次的旧高亮 */
+async function bgPurgeOtherScopes(scope) {
+  var map = await bgGetTempMap();
+  var changed = false;
+  for (var key in map) {
+    if (!map.hasOwnProperty(key)) continue;
+    var isGlobal = key === TEMP_GLOBAL_KEY;
+    var keep = scope === TEMP_SCOPE_GLOBAL ? isGlobal : (scope === TEMP_SCOPE_TAB ? !isGlobal : false);
+    if (!keep) { delete map[key]; changed = true; }
+  }
+  if (changed) await chrome.storage.local.set({ [TEMP_KEY]: map });
+}
+
 function bgLog() {
   if (false) {
     var a = ['[AH BG]'];
@@ -251,7 +419,8 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     });
     return false;
   }
-  if (msg.type === 'TEMP_HIGHLIGHT' || msg.type === 'CLEAR_TEMP' || msg.type === 'SET_HIDDEN_IDS') {
+  // 临时高亮的增删改统一走 SYNC_TEMP / ADD_TEMP_KEYWORD，经后台落盘后再广播，这里不再直接转发
+  if (msg.type === 'SET_HIDDEN_IDS') {
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
       if (tabs[0]) sendToAllFrames(tabs[0].id, msg);
     });
@@ -330,32 +499,93 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     });
     return true;
   }
+  // 跟随标签页 / 全局范围：以后台存储为准，直接读；仅当前页面：回到页面里逐 frame 收集
   if (msg.type === 'GET_TEMP_KEYWORDS') {
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
       if (!tabs[0]) { sendResponse([]); return; }
-      queryAllFrames(tabs[0].id, msg).then(function (results) {
-        var merged = [];
-        var seen = {};
-        for (var r = 0; r < results.length; r++) {
-          var arr = results[r];
-          if (!Array.isArray(arr)) continue;
-          for (var i = 0; i < arr.length; i++) {
-            var item = arr[i];
-            // 去重 key 覆盖全部样式字段，避免同文本不同样式的临时关键词被误合并
-            var key = item.text + '|' + item.color + '|' + item.matchType +
-              '|' + (item.fontSize || 1) +
-              '|' + (item.textColor === undefined ? '' : (item.textColor === null ? '@auto' : item.textColor)) +
-              '|' + (item.bold ? '1' : '0') +
-              '|' + (item.italic ? '1' : '0') +
-              '|' + (item.underline ? '1' : '0') +
-              '|' + (item.strike ? '1' : '0');
-            if (!seen[key]) { seen[key] = true; merged.push(item); }
-          }
-        }
-        sendResponse(merged);
+      var tabId = tabs[0].id;
+      bgGetTempScope().then(function (scope) {
+        if (scope === TEMP_SCOPE_PAGE) return bgCollectTempFromFrames(tabId);
+        return bgGetTempState(scope, tabId).then(function (state) { return state.keywords; });
+      }).then(function (keywords) {
+        sendResponse(keywords || []);
       }).catch(function () { sendResponse([]); });
     });
     return true;
+  }
+  // 页面加载后内容脚本主动拉取，用于恢复该标签页的临时高亮
+  if (msg.type === 'GET_TEMP_STATE') {
+    var tempTabId = (sender.tab && sender.tab.id) ? sender.tab.id : 0;
+    bgGetTempScope().then(function (scope) {
+      return bgGetTempState(scope, tempTabId).then(function (state) {
+        sendResponse({ scope: scope, keywords: state.keywords, hidden: state.hidden });
+      });
+    }).catch(function () {
+      sendResponse({ scope: TEMP_SCOPE_TAB, keywords: [], hidden: [] });
+    });
+    return true;
+  }
+  // 右键菜单 / 快捷键添加：先落盘再广播，保证跨网页后仍在
+  // 「仅当前页面」不入后台，由内容脚本自行持有，这里不会收到该消息
+  if (msg.type === 'ADD_TEMP_KEYWORD') {
+    var tempTabId = (sender.tab && sender.tab.id) ? sender.tab.id : 0;
+    if (!tempTabId || !msg.keyword) { sendResponse({ ok: false }); return true; }
+    bgGetTempScope().then(function (scope) {
+      return bgGetTempState(scope, tempTabId).then(function (state) {
+        state.keywords.push(msg.keyword);
+        return bgSaveTempState(scope, tempTabId, state);
+      }).then(function () {
+        sendResponse({ ok: true, count: 1 });
+        return bgGetTempState(scope, tempTabId);
+      }).then(function (state) {
+        // 广播与响应解耦：落盘结果已回给内容脚本，推送失败不影响本次操作
+        return bgPushTempState(scope, tempTabId, state);
+      }).catch(function () {});
+    }).catch(function () {
+      sendResponse({ ok: false });
+    });
+    return true;
+  }
+  // 弹窗全量同步：关键词列表 + 隐藏态一起下发，避免两份状态各写一半
+  if (msg.type === 'SYNC_TEMP') {
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+      if (!tabs[0]) { sendResponse({ ok: false }); return; }
+      var tempTabId = tabs[0].id;
+      var nextState = {
+        keywords: msg.keywords || [],
+        hidden: filterTempHiddenIds(msg.hiddenIds)
+      };
+      bgGetTempScope().then(function (scope) {
+        return bgSaveTempState(scope, tempTabId, nextState).then(function () {
+          sendResponse({ ok: true });
+          // 仅当前页面不落盘，但仍要把弹窗的结果广播给页面，否则改动留在弹窗里出不去
+          return bgPushTempState(scope, tempTabId, nextState);
+        }).catch(function () {
+          sendResponse({ ok: false });
+        });
+      }).catch(function () {
+        sendResponse({ ok: false });
+      });
+    });
+    return true;
+  }
+  // 生效范围切换后，让已打开页面按新范围重取一份
+  if (msg.type === 'TEMP_SCOPE_CHANGED') {
+    bgRefreshTempEverywhere().catch(function () {});
+    return false;
+  }
+  if (msg.type === 'CLEAR_TEMP') {
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+      if (!tabs[0]) return;
+      var tempTabId = tabs[0].id;
+      var empty = { keywords: [], hidden: [] };
+      bgGetTempScope().then(function (scope) {
+        return bgSaveTempState(scope, tempTabId, empty).then(function () {
+          return bgPushTempState(scope, tempTabId, empty);
+        });
+      }).catch(function () {});
+    });
+    return false;
   }
   if (msg.type === 'UPDATE_BADGE') {
     if (sender.tab && sender.tab.id) {
@@ -518,16 +748,18 @@ chrome.contextMenus.onClicked.addListener(function (info, tab) {
   if (!selectedText) return;
 
   if (info.menuItemId === 'add-highlight') {
-    chrome.tabs.sendMessage(tab.id, {
-      type: 'CONTEXT_ADD_HIGHLIGHT',
-      text: selectedText
-    }, function (resp) {
+    // 只发给发起右键的那一帧：不带 frameId 会广播到所有 frame，
+    // 每个 frame 各生成一个不同 id / 不同随机色的关键词，落盘后就是一堆重复项
+    var addOpts = (typeof info.frameId === 'number') ? { frameId: info.frameId } : null;
+    var addCb = function (resp) {
       if (resp && resp.count > 0 && resp.settings) {
         if (resp.settings.openPopupOnAdd !== false) {
           chrome.action.openPopup().catch(function () {});
         }
       }
-    });
+    };
+    if (addOpts) chrome.tabs.sendMessage(tab.id, { type: 'CONTEXT_ADD_HIGHLIGHT', text: selectedText }, addOpts, addCb);
+    else chrome.tabs.sendMessage(tab.id, { type: 'CONTEXT_ADD_HIGHLIGHT', text: selectedText }, addCb);
   }
 
   if (info.menuItemId === 'spot-highlight') {
@@ -595,7 +827,25 @@ chrome.tabs.onRemoved.addListener(function (tabId) {
   delete disabledTabs[tabId];
   delete tabBadgeCounts[tabId];
   clearNavStatesForTab(tabId);
+  bgDeleteTempState(tabId).catch(function () {});
   saveDisabledTabs();
+});
+
+// 临时高亮只在当前浏览器会话内有效：浏览器启动时整体清空
+chrome.runtime.onStartup.addListener(function () {
+  chrome.storage.local.remove(TEMP_KEY).catch(function () {});
+});
+
+// 新标签页继承：target=_blank / window.open 打开的标签页带走来源标签页的临时高亮。
+// 两个事件都会触发，写入是幂等的覆盖，重复执行无副作用
+chrome.tabs.onCreated.addListener(function (tab) {
+  if (!tab || !tab.openerTabId || !tab.id) return;
+  bgInheritTempState(tab.openerTabId, tab.id).catch(function () {});
+});
+
+chrome.webNavigation.onCreatedNavigationTarget.addListener(function (details) {
+  if (!details || !details.sourceTabId || !details.tabId) return;
+  bgInheritTempState(details.sourceTabId, details.tabId).catch(function () {});
 });
 
 async function sendHighlightToTab(tabId, url) {

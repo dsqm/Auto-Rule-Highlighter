@@ -63,6 +63,8 @@
     .settings-row label { width: 140px; font-size: 13px; color: #666; flex-shrink: 0; }
     .settings-row .field { flex: 1; }
     .settings-row .hint { font-size: 11px; color: #999; margin-top: 2px; }
+    .settings-row select { padding: 5px 8px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 13px; outline: none; background: #fff; color: #333; font-family: inherit; }
+    .settings-row select:focus { border-color: #1890ff; }
 
     .export-import { display: flex; gap: 8px; margin-top: 12px; }
     .toast { position: fixed; top: 20px; right: 20px; background: #52c41a; color: #fff; padding: 10px 20px; border-radius: 6px; font-size: 13px; opacity: 0; transition: opacity 0.3s; z-index: 1000; }
@@ -145,6 +147,17 @@
         <div class="field">
           <input type="checkbox" id="settHistoryEnabled" checked>
           <span style="font-size:12px;color:#999;margin-left:8px;">临时高亮输入内容自动记录，关闭后不再保存历史</span>
+        </div>
+      </div>
+      <div class="settings-row">
+        <label>临时高亮生效范围</label>
+        <div class="field">
+          <select id="settTempScope">
+            <option value="page">仅当前页面</option>
+            <option value="tab">跟随标签页（含新标签页继承）</option>
+            <option value="global">全局所有网页</option>
+          </select>
+          <div class="hint" id="settTempScopeHint"></div>
         </div>
       </div>
       <div class="settings-row">

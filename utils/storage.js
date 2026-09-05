@@ -12,6 +12,10 @@ var Storage = {
     tempStyle: null,
     historyEnabled: true,
     tempHistory: [],
+    // 临时高亮生效范围：page=仅当前页面（刷新/跳转即失效）
+    // tab=跟随标签页（刷新、前进后退、跳转保留，target=_blank 新标签页继承来源快照）
+    // global=全局所有网页（所有标签页共用一份，手动清空为止）
+    tempScope: 'tab',
     defaultMatchType: 'contains',
     defaultCaseSensitive: false,
     defaultAcrossElements: false,

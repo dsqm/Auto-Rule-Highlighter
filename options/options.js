@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     var next = Object.assign({}, current, {
       showRail: document.getElementById('settShowRail').checked,
       historyEnabled: document.getElementById('settHistoryEnabled').checked,
+      tempScope: document.getElementById('settTempScope').value,
       contextMenuEnabled: document.getElementById('settContextMenuEnabled').checked,
       openPopupOnAdd: document.getElementById('settOpenPopupOnAdd').checked,
       openPopupOnAddShortcut: document.getElementById('settOpenPopupOnAddShortcut').checked,
@@ -46,6 +47,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   currentSettings = settings;
   document.getElementById('settShowRail').checked = settings.showRail !== false;
   document.getElementById('settHistoryEnabled').checked = settings.historyEnabled !== false;
+
+  var TEMP_SCOPE_HINTS = {
+    page: '只在当前页面生效，刷新、前进后退或跳到别的网页后即失效',
+    tab: '当前标签页内刷新、前进后退、跳转都保留；由本标签页打开的新标签页会继承一份副本。自己新开的标签页不继承',
+    global: '所有标签页、所有网站共用一份，新开的标签页也一样，需手动清空'
+  };
+  document.getElementById('settTempScope').value = settings.tempScope || 'tab';
+  function updateTempScopeHint() {
+    var v = document.getElementById('settTempScope').value;
+    document.getElementById('settTempScopeHint').textContent = TEMP_SCOPE_HINTS[v] || '';
+  }
+  updateTempScopeHint();
 
   document.getElementById('settContextMenuEnabled').checked = settings.contextMenuEnabled !== false;
   document.getElementById('settOpenPopupOnAdd').checked = settings.openPopupOnAdd !== false;
@@ -243,6 +256,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.getElementById('settHistoryEnabled').addEventListener('change', async () => {
     await saveCurrentSettings();
+  });
+
+  document.getElementById('settTempScope').addEventListener('change', async () => {
+    updateTempScopeHint();
+    await saveCurrentSettings();
+    // 切到跟随标签页 / 全局后，让已打开的页面立刻按新范围重新取一份，不用手动刷新
+    chrome.runtime.sendMessage({ type: 'TEMP_SCOPE_CHANGED' }).catch(() => {});
   });
 
   document.getElementById('settContextMenuEnabled').addEventListener('change', async function () {

@@ -17,6 +17,9 @@
   var tempKeywords = [];
   var hiddenKwIds = [];
   var manualShowKwIds = [];
+  // 临时高亮生效范围（设置项）：page=仅当前页面，tab=跟随标签页，global=全局。
+  // 只影响「新增关键词交给谁保管」：page 留在本页内存，其余两种上报后台
+  var tempScope = 'tab';
   var cachedKeywordMap = null;
   var cachedKeywordMapTime = 0;
   var CACHE_TTL = 100;
@@ -102,13 +105,15 @@
     if (msg.type === 'APPLY_HIGHLIGHT') {
       applyHighlight(msg.rules || [], msg.settings || {});
     }
-    if (msg.type === 'TEMP_HIGHLIGHT') {
-      tempKeywords = msg.keywords || [];
-      reHighlight();
+    // 临时高亮由后台统一持有（按标签页持久化），这里只接收后台广播的结果并渲染
+    if (msg.type === 'SYNC_TEMP_STATE') {
+      if (msg.scope) tempScope = msg.scope;
+      // 切到「仅当前页面」时的单纯范围通知：页面现有的临时高亮不动
+      if (msg.keepLocal) return;
+      applyTempState(msg.keywords || [], msg.hiddenIds || []);
     }
     if (msg.type === 'CLEAR_TEMP') {
-      tempKeywords = [];
-      reHighlight();
+      applyTempState([], []);
     }
     if (msg.type === 'SET_HIDDEN_IDS') {
       hiddenKwIds = msg.hiddenIds || [];
@@ -169,6 +174,7 @@
       });
       return true;
     }
+    // 「仅当前页面」范围下后台不持有临时高亮，弹窗读取时由后台逐 frame 收集这里的数据
     if (msg.type === 'GET_TEMP_KEYWORDS') {
       sendResponse(tempKeywords);
       return true;
@@ -191,13 +197,14 @@
     if (msg.type === 'CONTEXT_ADD_HIGHLIGHT') {
       var selText = msg.text;
       if (!selText) return;
-      var rndColor = getRandomDistinctColor();
-      var kw = { id: CommonKit.uid('tmp_', 5), text: selText, matchType: 'contains', caseSensitive: false, acrossElements: false, color: rndColor };
-      tempKeywords.push(kw);
-      reHighlight();
-      var settingsResp = {};
-      try { settingsResp = currentSettings || {}; } catch (e2) {}
-      sendResponse({ count: 1, settings: settingsResp });
+      var kw = buildTempKeyword(selText);
+      // 先交给后台落盘，再由广播回传渲染；内容脚本不本地 push，避免与后台状态各写一份
+      reportTempKeyword(kw, function (ok) {
+        var settingsResp = {};
+        try { settingsResp = currentSettings || {}; } catch (e2) {}
+        sendResponse({ count: ok ? 1 : 0, settings: settingsResp });
+      });
+      return true;
     }
     if (msg.type === 'CONTEXT_SPOT_HIGHLIGHT') {
       var spotSelText = msg.text;
@@ -217,13 +224,13 @@
     if (msg.type === 'SHORTCUT_ADD_HIGHLIGHT') {
       var selText = window.getSelection().toString();
       if (!selText) return;
-      var rndColor = getRandomDistinctColor();
-      var kw = { id: CommonKit.uid('tmp_', 5), text: selText, matchType: 'contains', caseSensitive: false, acrossElements: false, color: rndColor };
-      tempKeywords.push(kw);
-      reHighlight();
-      try {
-        chrome.runtime.sendMessage({ type: 'SHORTCUT_HIGHLIGHT_DONE', action: 'add' });
-      } catch (e) {}
+      var kw = buildTempKeyword(selText);
+      reportTempKeyword(kw, function (ok) {
+        if (!ok) return;
+        try {
+          chrome.runtime.sendMessage({ type: 'SHORTCUT_HIGHLIGHT_DONE', action: 'add' });
+        } catch (e) {}
+      });
     }
     if (msg.type === 'SHORTCUT_SPOT_HIGHLIGHT') {
       var spotSelText = window.getSelection().toString();
@@ -260,6 +267,85 @@
     });
   }
 
+  /** 页面加载时拉取本标签页的临时高亮（关键词 + 隐藏态），跨网页后据此恢复 */
+  function requestTempState(done) {
+    var settled = false;
+    var finish = function () {
+      if (settled) return;
+      settled = true;
+      done();
+    };
+    // 兜底：后台迟迟不回也不能把整页高亮卡住，先按现有状态渲染
+    var timer = setTimeout(finish, 1500);
+    try {
+      chrome.runtime.sendMessage({ type: 'GET_TEMP_STATE' }, function (resp) {
+        clearTimeout(timer);
+        var late = settled;
+        if (!chrome.runtime.lastError && resp) {
+          tempScope = resp.scope || 'tab';
+          tempKeywords = Array.isArray(resp.keywords) ? resp.keywords : [];
+          hiddenKwIds = Array.isArray(resp.hidden) ? resp.hidden : [];
+        }
+        finish();
+        // 回得比兜底计时还晚：首次渲染已经跑完了，补一次重建把临时高亮画出来
+        if (late && tempKeywords.length > 0) reHighlight();
+      });
+    } catch (e) {
+      clearTimeout(timer);
+      finish();
+    }
+  }
+
+  /**
+   * 运行中同步后台广播下来的临时高亮状态。
+   * 只替换 tmp_ 前缀的隐藏态，规则关键词的手动隐藏不受影响。
+   */
+  function applyTempState(keywords, tempHidden) {
+    var kept = [];
+    for (var i = 0; i < hiddenKwIds.length; i++) {
+      if (String(hiddenKwIds[i]).indexOf('tmp_') !== 0) kept.push(hiddenKwIds[i]);
+    }
+    var nextHidden = kept.concat(tempHidden || []);
+    // 关键词和隐藏态都没变就是空转，直接跳过（广播会打到每个 frame，重复拆建代价高）。
+    // 隐藏态变了必须重建：隐藏的临时关键词不生成 mark，取消隐藏时没有旧 mark 可以复用
+    if (JSON.stringify(keywords) === JSON.stringify(tempKeywords) &&
+        JSON.stringify(nextHidden) === JSON.stringify(hiddenKwIds)) {
+      return;
+    }
+    hiddenKwIds = nextHidden;
+    tempKeywords = keywords;
+    reHighlight();
+  }
+
+  function buildTempKeyword(text) {
+    return {
+      id: CommonKit.uid('tmp_', 5),
+      text: text,
+      matchType: 'contains',
+      caseSensitive: false,
+      acrossElements: false,
+      color: getRandomDistinctColor()
+    };
+  }
+
+  /**
+   * 新增临时关键词。
+   * 「仅当前页面」范围下后台不保管，直接留在页面内存里（刷新即随文档回收）；
+   * 其余范围交给后台按标签页 / 全局落盘，再由广播回传渲染。
+   */
+  function reportTempKeyword(kw, done) {
+    if (tempScope === 'page') {
+      tempKeywords.push(kw);
+      reHighlight();
+      done(true);
+      return;
+    }
+    chrome.runtime.sendMessage({ type: 'ADD_TEMP_KEYWORD', keyword: kw }, function (resp) {
+      if (chrome.runtime.lastError || !resp || !resp.ok) { done(false); return; }
+      done(true);
+    });
+  }
+
   function requestRulesFromBackground() {
     chrome.runtime.sendMessage({ type: 'GET_MATCHED_RULES', url: location.href }, function (response) {
       if (chrome.runtime.lastError) {
@@ -271,9 +357,16 @@
       // 否则「高亮此处」在无规则页面上取不到预设样式
       chrome.runtime.sendMessage({ type: 'GET_SETTINGS' }, function (settings) {
         if (chrome.runtime.lastError) settings = {};
-        // 必须传局部变量：applyHighlight 要拿 rules 与 currentRules（旧值）对比，
-        // 若先把结果写回 currentRules 再传自身，unchanged 恒为 true，首次高亮会被短路
-        applyHighlight(rules, settings || {});
+        // 先用设置里的范围兜底：requestTempState 拉回权威值前，右键添加也要走对分支
+        var sc = (settings && settings.tempScope) || 'tab';
+        if (sc === 'page' || sc === 'tab' || sc === 'global') tempScope = sc;
+        // 先恢复临时关键词再统一渲染：临时高亮按标签页保留，跨网页后要能一次画全，
+        // 若先渲染规则再补临时词，整页会被拆建两次
+        requestTempState(function () {
+          // 必须传局部变量：applyHighlight 要拿 rules 与 currentRules（旧值）对比，
+          // 若先把结果写回 currentRules 再传自身，unchanged 恒为 true，首次高亮会被短路
+          applyHighlight(rules, settings || {});
+        });
       });
     });
   }
@@ -326,18 +419,30 @@
     }
   }
 
+  /** 当前临时高亮状态签名：用于 applyHighlight 防重入比较（临时词可能在两次调用之间到达） */
+  function tempStateSig() {
+    return JSON.stringify([tempKeywords, hiddenKwIds, manualShowKwIds]);
+  }
+  var lastRenderedTempSig = '';
+
   function applyHighlight(rules, settings) {
     // 弹窗每次打开都会触发 REFRESH_HIGHLIGHT；规则与设置都没变时跳过重建，
     // 否则已有高亮被全部拆掉后只有视口附近会懒加载恢复，导航会退化成只看到 1 条。
-    // 但「从未应用过高亮」时必须执行，否则首次加载即被短路，整个页面永远不高亮
+    // 但「从未应用过高亮」时必须执行，否则首次加载即被短路，整个页面永远不高亮。
+    // 注意必须把临时关键词状态一起比较：后台 onUpdated 广播往往赶在 GET_TEMP_STATE
+    // 响应之前先渲染一遍（temp=0），响应到达后若只比 rules/settings 会被误判为「没变」，
+    // 临时高亮就永远画不出来了
+    var tempSig = tempStateSig();
     var unchanged = highlightEverApplied &&
       currentRules.length === rules.length &&
       JSON.stringify(currentRules) === JSON.stringify(rules) &&
-      JSON.stringify(currentSettings) === JSON.stringify(settings);
+      JSON.stringify(currentSettings) === JSON.stringify(settings) &&
+      tempSig === lastRenderedTempSig;
     currentRules = rules;
     currentSettings = settings;
     if (unchanged) return;
     highlightEverApplied = true;
+    lastRenderedTempSig = tempSig;
     // 规则或设置刚变过，样式缓存必须失效，否则会拿旧样式渲染新配置
     invalidateStyleMap();
     if (pageDisabled) return;
@@ -383,6 +488,7 @@
   function _doReHighlight() {
     // 临时关键词的增删改都走这里，kwId 可能复用而样式已变，缓存必须失效
     invalidateStyleMap();
+    lastRenderedTempSig = tempStateSig();
     var keywords = getActiveKeywords();
     if (keywords.length === 0) {
       var existingMarks = getAllHighlightMarks();
@@ -1228,10 +1334,13 @@
       }
     }
     for (var k = 0; k < tempKeywords.length; k++) {
-      if (tempKeywords[k].text) {
-        keywordGlobalOrder[tempKeywords[k].id] = order++;
-        keywords.push(tempKeywords[k]);
-      }
+      var tkw = tempKeywords[k];
+      if (!tkw.text) continue;
+      // 眼形按钮隐藏的临时关键词直接不参与匹配（以前是弹窗发名单前先过滤掉，
+      // 现在名单要跨网页保留，隐藏态也一起持久化，改在这里过滤）
+      if (hiddenKwIds.indexOf(tkw.id) >= 0 && manualShowKwIds.indexOf(tkw.id) < 0) continue;
+      keywordGlobalOrder[tkw.id] = order++;
+      keywords.push(tkw);
     }
     return keywords;
   }
@@ -1302,7 +1411,8 @@
       lastEnd = match.end;
     }
     if (lastEnd < text.length) fragment.appendChild(document.createTextNode(text.slice(lastEnd)));
-    try { parent.replaceChild(fragment, textNode); } catch (e) {}
+    try { parent.replaceChild(fragment, textNode); } catch (e) {
+    }
   }
 
   // ---- 样式解析：统一走 utils/style.js，保证与 options / popup 的预览一致 ----

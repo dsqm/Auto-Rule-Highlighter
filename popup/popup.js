@@ -461,9 +461,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
   cppCancel.addEventListener('click', closeColorPicker);
 
+  /** 全量同步给后台：隐藏的临时关键词也要发过去（名单要跨网页保留），由后台落盘后广播 */
   function sendTempHighlight() {
-    var visible = tempKeywords.filter(function (kw) { return !hiddenKwIds.has(kw.id); });
-    chrome.runtime.sendMessage({ type: 'TEMP_HIGHLIGHT', keywords: visible }).catch(function () {});
+    chrome.runtime.sendMessage({
+      type: 'SYNC_TEMP',
+      keywords: tempKeywords,
+      hiddenIds: Array.from(hiddenKwIds)
+    }).catch(function () {});
     setTimeout(fetchHighlightCounts, 600);
   }
 
@@ -788,6 +792,8 @@ document.addEventListener('DOMContentLoaded', function () {
     if (action === 'clear-manual') {
       hiddenKwIds.clear();
       manualShowKwIds.clear();
+      // 临时关键词的隐藏态也持久化了，重置必须一并同步，否则跨网页后又会变回隐藏
+      sendTempHighlight();
       sendHiddenIds();
       renderAll();
     }
