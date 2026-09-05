@@ -1728,10 +1728,7 @@
    * 匹配期（_hide 标记）与渲染期（dataset 判定）都必须走这里，禁止再内联公式
    */
   function exclusiveHidesOrder(order, isTempKw) {
-    if (isTempKw) return false;
-    if (exclusiveStopOrder < 0) return false;
-    var n = (typeof order === 'number') ? order : parseInt(order, 10);
-    return !isNaN(n) && n > exclusiveStopOrder;
+    return CommonKit.isExclusiveCleared(order, isTempKw, exclusiveStopOrder);
   }
 
   /**

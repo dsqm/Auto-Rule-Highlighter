@@ -43,12 +43,22 @@ var CommonKit = (function () {
     return typeof id === 'string' && id.indexOf(TEMP_PREFIX) === 0;
   }
 
+  // 独占高亮清除的核心判定（纯函数，便于单测）：
+  // order（数字 / 数字字符串 / undefined）排在 stopOrder 之后即被清除；临时词豁免。
+  function isExclusiveCleared(order, isTempKw, stopOrder) {
+    if (isTempKw) return false;
+    if (stopOrder < 0) return false;
+    var n = (typeof order === 'number') ? order : parseInt(order, 10);
+    return !isNaN(n) && n > stopOrder;
+  }
+
   return {
     MATCH_TYPES: MATCH_TYPES,
     escapeHtml: escapeHtml,
     getMatchTypeLabel: getMatchTypeLabel,
     uid: uid,
     normalizeTempScope: normalizeTempScope,
-    isTempKwId: isTempKwId
+    isTempKwId: isTempKwId,
+    isExclusiveCleared: isExclusiveCleared
   };
 })();
