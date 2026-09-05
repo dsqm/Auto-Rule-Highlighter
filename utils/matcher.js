@@ -113,8 +113,20 @@ var Matcher = {
     }
   },
 
-  _escapeRegex(str) {
+  // 全量转义正则元字符（含 * ?），用于 contains / exact 等字面匹配。
+  // 供 content 脚本的合并快筛复用，避免多处各自维护一套转义字符集。
+  escapeRegex(str) {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  },
+
+  // 通配符转义：不转义 * ?（它们是通配符），其余元字符转义。
+  // 供 content 脚本的跨元素通配匹配复用。
+  escapeWildcard(str) {
+    return str.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+  },
+
+  _escapeRegex(str) {
+    return this.escapeRegex(str);
   },
 
   _wildcardMatch(str, pattern, ignoreCase) {
@@ -128,8 +140,7 @@ var Matcher = {
    * false 时只转义不锚定，用于文本子串匹配（高亮句子中的关键词）。
    */
   _wildcardToRegex(pattern, anchored) {
-    var body = pattern
-      .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    var body = this.escapeWildcard(pattern)
       .replace(/\*/g, '.*')
       .replace(/\?/g, '.');
     return anchored === false ? body : '^' + body + '$';

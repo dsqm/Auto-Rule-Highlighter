@@ -564,7 +564,7 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     var frameId = (sender.tab && sender.frameId !== undefined) ? sender.frameId : 0;
     // 存完整样式（含自动黑白等文字配置），popup 预览/编辑需要还原，只存背景色会丢失
     var st = msg.style || {};
-    _bgStoreSpotHighlight(tabId, frameId, msg.spotId, {
+    Storage.storeSpotHighlight(tabId, frameId, msg.spotId, {
       text: msg.text,
       color: st.bgColor || msg.color,
       textColor: st.textColor,
@@ -579,7 +579,7 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   if (msg.type === 'GET_SPOT_HIGHLIGHTS') {
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
       if (!tabs[0]) { sendResponse([]); return; }
-      _bgGetAllSpotHighlightsForTab(tabs[0].id).then(sendResponse).catch(function () { sendResponse([]); });
+      Storage.getAllSpotHighlightsForTab(tabs[0].id).then(sendResponse).catch(function () { sendResponse([]); });
     });
     return true;
   }
@@ -587,7 +587,7 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
       if (!tabs[0]) return;
       sendToAllFrames(tabs[0].id, { type: 'DELETE_SPOT', spotId: msg.spotId });
-      _bgDeleteSpotHighlight(tabs[0].id, msg.spotId).catch(function () {});
+      Storage.deleteSpotHighlightForTab(tabs[0].id, msg.spotId).catch(function () {});
     });
     return false;
   }
@@ -595,7 +595,7 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
       if (!tabs[0]) return;
       sendToAllFrames(tabs[0].id, { type: 'UPDATE_SPOT_STYLE', spotId: msg.spotId, style: msg.style });
-      _bgUpdateSpotStyle(tabs[0].id, msg.spotId, msg.style || {}).catch(function () {});
+      Storage.updateSpotStyle(tabs[0].id, msg.spotId, msg.style || {}).catch(function () {});
     });
     return false;
   }
@@ -611,23 +611,6 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     return false;
   }
 });
-
-// spot 的存储键格式与读写全部在 utils/storage.js 维护，这里只做消息层转发
-function _bgGetAllSpotHighlightsForTab(tabId) {
-  return Storage.getAllSpotHighlightsForTab(tabId);
-}
-
-function _bgDeleteSpotHighlight(tabId, spotId) {
-  return Storage.deleteSpotHighlightForTab(tabId, spotId);
-}
-
-function _bgStoreSpotHighlight(tabId, frameId, spotId, data) {
-  return Storage.storeSpotHighlight(tabId, frameId, spotId, data);
-}
-
-function _bgUpdateSpotStyle(tabId, spotId, style) {
-  return Storage.updateSpotStyle(tabId, spotId, style);
-}
 
 chrome.contextMenus.onClicked.addListener(function (info, tab) {
   if (!tab || !tab.id) return;

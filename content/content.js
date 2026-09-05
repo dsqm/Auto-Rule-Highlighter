@@ -664,7 +664,8 @@
     }
 
     if (acrossKws && acrossKws.length > 0) {
-      highlightAcrossElements(acrossKws, getAllTextNodes(), buildKwClasses(acrossKws));
+      // 复用本批已收集的文本节点，避免再走一遍全页 TreeWalker
+      highlightAcrossElements(acrossKws, batchTextNodes, buildKwClasses(acrossKws));
     }
     onHighlightBatchComplete();
   }
@@ -730,10 +731,9 @@
             var wkey = kw.text + '\x00' + (kw.caseSensitive ? '1' : '0');
             var wildRegex = wildCache[wkey];
             if (!wildRegex) {
-              var wildPat = kw.text
-                .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-                .replace(/\*/g, '[\\s\\S]*?')
-                .replace(/\?/g, '[\\s\\S]');
+            var wildPat = Matcher.escapeWildcard(kw.text)
+              .replace(/\*/g, '[\\s\\S]*?')
+              .replace(/\?/g, '[\\s\\S]');
               wildRegex = wildCache[wkey] = new RegExp(wildPat, kw.caseSensitive ? 'g' : 'gi');
             }
             matches = [];
@@ -1246,7 +1246,7 @@
       var kw = keywords[i];
       var mt = kw.matchType || 'contains';
       if ((mt === 'contains' || mt === 'exact') && kw.text) {
-        parts.push(String(kw.text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+        parts.push(Matcher.escapeRegex(String(kw.text)));
         plain[i] = true;
       } else {
         plain[i] = false;
