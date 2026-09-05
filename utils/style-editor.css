@@ -28,6 +28,23 @@
 .se-chip.u { text-decoration: underline; }
 .se-chip.s { text-decoration: line-through; }
 
+/* ===== 风格选项栏（StyleBar，options / popup 复用）=====
+ * mountStyleBar（utils/style-editor.js）生成的「匹配类型 + Aa/↔ + 当前样式
+ * 方块 + 预设圆」组件样式，两页面共用同一份。 */
+.match-type-row { display: flex; gap: 4px; }
+.match-type-btn { font-size: 11px; padding: 3px 8px; border: 1px solid #d9d9d9; border-radius: 3px; background: #fafafa; color: #666; cursor: pointer; transition: all 0.15s; }
+.match-type-btn:hover { border-color: #1890ff; color: #1890ff; }
+.match-type-btn.active { background: #1890ff; color: #fff; border-color: #1890ff; }
+.toggle-options-row { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+.v-sep { width: 2px; height: 18px; background: #d0d0d0; flex-shrink: 0; align-self: center; margin: 0 4px; border-radius: 1px; }
+.toggle-opt-btn { font-size: 10px; padding: 3px 7px; border: 1px solid #e0e0e0; border-radius: 3px; background: #fafafa; color: #bbb; cursor: pointer; font-weight: 600; transition: all 0.15s; line-height: 1.4; }
+.toggle-opt-btn:hover { border-color: #1890ff; }
+.toggle-opt-btn.active { background: #e6f7ff; color: #1890ff; border-color: #91d5ff; }
+.toggle-opt-btn.across { font-size: 12px; padding: 3px 5px; }
+.preset-dot { cursor: pointer; flex-shrink: 0; padding: 0; border: none; line-height: 0; transition: transform 0.1s, border-color 0.1s; }
+.preset-dot:hover { transform: scale(1.1); }
+.preset-dot.selected { box-shadow: 0 0 0 2px #1890ff; }
+
 /* ===== 居中弹窗/浮动色板骨架（.modal 系，options / popup 复用）=====
  * 公共视觉：白底 / 圆角 / 阴影 / 标题 / 按钮栏。宽度、内边距等随页面载体
  * 而异的特性留在各页面自己的 <style> 内覆盖。 */

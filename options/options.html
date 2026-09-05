@@ -42,7 +42,6 @@
     .form-group input:focus, .form-group select:focus { border-color: #1890ff; }
     .form-group .checkbox-row { display: flex; align-items: center; gap: 8px; }
     .form-group .checkbox-row input { width: auto; }
-    .v-sep { width: 2px; height: 18px; background: #d0d0d0; flex-shrink: 0; align-self: center; margin: 0 4px; border-radius: 1px; }
     .color-input { width: 50px !important; height: 32px; padding: 2px !important; cursor: pointer; }
 
     .modal { padding: 24px; width: 440px; max-height: 80vh; overflow-y: auto; }
@@ -96,21 +95,6 @@
     .kw-preset-dot { width: 28px; height: 28px; border-radius: 50%; cursor: pointer; border: none; padding: 0; flex-shrink: 0; transition: transform 0.15s; }
     .kw-preset-dot:hover { transform: scale(1.2); border-color: #1890ff; }
     .kw-preset-dot.selected { box-shadow: 0 0 0 2px #1890ff; }
-    /* 共享样式选项栏（mountStyleBar）里的预设圆点 */
-    .preset-dot { cursor: pointer; flex-shrink: 0; padding: 0; border: none; line-height: 0; transition: transform 0.1s, border-color 0.1s; }
-    .preset-dot:hover { transform: scale(1.1); }
-    .preset-dot.selected { box-shadow: 0 0 0 2px #1890ff; }
-
-    .match-type-btn { font-size: 11px; padding: 3px 8px; border: 1px solid #d9d9d9; border-radius: 3px; background: #fafafa; color: #666; cursor: pointer; transition: all 0.15s; }
-    .match-type-btn:hover { border-color: #1890ff; color: #1890ff; }
-    .match-type-btn.active { background: #1890ff; color: #fff; border-color: #1890ff; }
-    .match-type-row { display: flex; gap: 4px; }
-    /* 共享样式选项栏（mountStyleBar）第二行：当前样式方块 + 预设圆 */
-    .toggle-options-row { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
-    .toggle-opt-btn { font-size: 10px; padding: 3px 7px; border: 1px solid #e0e0e0; border-radius: 3px; background: #fafafa; color: #bbb; cursor: pointer; font-weight: 600; transition: all 0.15s; line-height: 1.4; }
-    .toggle-opt-btn:hover { border-color: #1890ff; }
-    .toggle-opt-btn.active { background: #e6f7ff; color: #1890ff; border-color: #91d5ff; }
-    .toggle-opt-btn.across { font-size: 12px; padding: 3px 5px; }
 
     .storage-bar-wrap { flex: 1; min-width: 200px; }
     .storage-bar-outer { width: 100%; height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden; margin-bottom: 6px; }
