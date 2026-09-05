@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Auto Rule Highlighter",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "根据规则自动高亮页面字符，支持正则、通配符，滚动条标记导航，临时高亮查询",
   "permissions": ["storage", "activeTab", "tabs", "webNavigation", "contextMenus"],
   "host_permissions": ["<all_urls>"],

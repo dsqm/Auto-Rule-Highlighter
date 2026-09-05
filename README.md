@@ -53,11 +53,6 @@
 
 https://docs.qq.com/aio/DRWtMY3FQS0ZHRGRG
 
-### 跨 iframe 与 Shadow DOM
-
-- 自动检测页面中的 iframe 和 Shadow DOM，注入高亮样式和匹配逻辑。
-- 设置页面中的 `match_origin_as_fallback` 确保跨域 iframe 也能正常高亮。
-
 ## 安装
 
 ## 反馈与贡献
