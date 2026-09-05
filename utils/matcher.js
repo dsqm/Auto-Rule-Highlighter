@@ -61,13 +61,13 @@ var Matcher = {
           }
           return subMatches;
         case 'exact':
-          regex = this._getCachedRegex('\\b' + this._escapeRegex(keyword) + '\\b', flags);
-          break;
+          return this._exactMatches(text, keyword, caseSensitive);
         case 'regex':
           regex = this._getCachedRegex(keyword, flags);
           break;
         case 'wildcard':
-          regex = this._getCachedRegex(this._wildcardToRegex(keyword), flags);
+          // 文本匹配不锚定 ^...$，否则只能整段文本节点相等时命中，无法高亮文本中的子串
+          regex = this._getCachedRegex(this._wildcardToRegex(keyword, false), flags);
           break;
         default:
           regex = this._getCachedRegex(this._escapeRegex(keyword), flags);
@@ -78,8 +78,8 @@ var Matcher = {
       var m;
       regex.lastIndex = 0;
       while ((m = regex.exec(text)) !== null) {
+        if (m[0].length === 0) { regex.lastIndex++; continue; }
         matches.push({ start: m.index, end: m.index + m[0].length, text: m[0] });
-        if (m[0].length === 0) regex.lastIndex++;
       }
       return matches;
     } catch (e) {
@@ -97,13 +97,12 @@ var Matcher = {
           if (caseSensitive) return text.indexOf(keyword) !== -1;
           return text.toLowerCase().indexOf(keyword.toLowerCase()) !== -1;
         case 'exact':
-          regex = this._getCachedRegex('\\b' + this._escapeRegex(keyword) + '\\b', flags);
-          return regex ? regex.test(text) : false;
+          return this._exactHasMatch(text, keyword, caseSensitive);
         case 'regex':
           regex = this._getCachedRegex(keyword, flags);
           return regex ? regex.test(text) : false;
         case 'wildcard':
-          regex = this._getCachedRegex(this._wildcardToRegex(keyword), flags);
+          regex = this._getCachedRegex(this._wildcardToRegex(keyword, false), flags);
           return regex ? regex.test(text) : false;
         default:
           if (caseSensitive) return text.indexOf(keyword) !== -1;
@@ -119,14 +118,65 @@ var Matcher = {
   },
 
   _wildcardMatch(str, pattern, ignoreCase) {
-    var regex = this._getCachedRegex(this._wildcardToRegex(pattern), ignoreCase ? 'i' : '');
+    // URL 匹配语义 = 整串匹配，需要 ^...$ 锚定
+    var regex = this._getCachedRegex(this._wildcardToRegex(pattern, true), ignoreCase ? 'i' : '');
     return regex ? regex.test(str) : false;
   },
 
-  _wildcardToRegex(pattern) {
-    return '^' + pattern
+  /**
+   * 通配符转正则。anchored=true（默认）时加 ^...$ 用于 URL 整串匹配；
+   * false 时只转义不锚定，用于文本子串匹配（高亮句子中的关键词）。
+   */
+  _wildcardToRegex(pattern, anchored) {
+    var body = pattern
       .replace(/[.+^${}()|[\]\\]/g, '\\$&')
       .replace(/\*/g, '.*')
-      .replace(/\?/g, '.') + '$';
+      .replace(/\?/g, '.');
+    return anchored === false ? body : '^' + body + '$';
+  },
+
+  /**
+   * 精确（整词）匹配：关键词前后都不能是 ASCII 词字符 [A-Za-z0-9_]。
+   * 等价于 \b 对 ASCII 的行为，但把中文等非 ASCII 字符视为词边界，
+   * 修复了 \b 只认 [A-Za-z0-9_]、导致中文关键词永远无法精确命中的问题。
+   */
+  _isAsciiWordChar(ch) {
+    if (!ch) return false;
+    var c = ch.charCodeAt(0);
+    return (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 95;
+  },
+
+  _exactMatches(text, keyword, caseSensitive) {
+    if (!keyword || !text) return [];
+    var hay = caseSensitive ? text : text.toLowerCase();
+    var needle = caseSensitive ? keyword : keyword.toLowerCase();
+    var matches = [];
+    var from = 0;
+    var idx;
+    while ((idx = hay.indexOf(needle, from)) !== -1) {
+      var before = idx > 0 ? text.charAt(idx - 1) : '';
+      var afterIdx = idx + needle.length;
+      var after = afterIdx < text.length ? text.charAt(afterIdx) : '';
+      if (!this._isAsciiWordChar(before) && !this._isAsciiWordChar(after)) {
+        matches.push({ start: idx, end: afterIdx, text: text.slice(idx, afterIdx) });
+      }
+      from = idx + Math.max(1, needle.length);
+    }
+    return matches;
+  },
+
+  _exactHasMatch(text, keyword, caseSensitive) {
+    if (!keyword || !text) return false;
+    var hay = caseSensitive ? text : text.toLowerCase();
+    var needle = caseSensitive ? keyword : keyword.toLowerCase();
+    var from = 0;
+    var idx;
+    while ((idx = hay.indexOf(needle, from)) !== -1) {
+      var before = idx > 0 ? text.charAt(idx - 1) : '';
+      var after = idx + needle.length < text.length ? text.charAt(idx + needle.length) : '';
+      if (!this._isAsciiWordChar(before) && !this._isAsciiWordChar(after)) return true;
+      from = idx + Math.max(1, needle.length);
+    }
+    return false;
   }
 };

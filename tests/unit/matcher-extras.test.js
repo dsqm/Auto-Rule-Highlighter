@@ -40,6 +40,22 @@ describe('Matcher.getMatches（正则 / 通配 / 大小写组合）', () => {
     const ms = M().getMatches('ab ab ab', 'ab', 'contains', false);
     expect(ms.map((m) => m.start)).toEqual([0, 3, 6]);
   });
+
+  it('exact 中文关键词能命中（\b 只认 ASCII，曾导致中文精确匹配永远失效）', () => {
+    expect(M().getMatches('关键词', '关键词', 'exact', false)).toHaveLength(1);
+    expect(M().getMatches('这是一个关键词例子', '关键词', 'exact', false)).toHaveLength(1);
+    // 英文整词语义保持：foo 不命中 foobar
+    expect(M().getMatches('foobar', 'foo', 'exact', false)).toHaveLength(0);
+    expect(M().getMatches('foo bar', 'foo', 'exact', false)).toHaveLength(1);
+  });
+
+  it('wildcard 能匹配文本中的子串（不再要求整段相等）', () => {
+    expect(M().getMatches('您的发货通知已寄出', '发货*', 'wildcard', false)).toHaveLength(1);
+    expect(M().getMatches('有关键词出现', '关*词', 'wildcard', false)).toHaveLength(1);
+    // URL 整串匹配语义不受影响（matchUrl 的 wildcard 仍锚定 ^...$）
+    expect(M().matchUrl('https://x.github.com/page', '*github.com*', 'wildcard')).toBe(true);
+    expect(M().matchUrl('https://example.com', 'github*', 'wildcard')).toBe(false);
+  });
 });
 
 describe('CommonKit.isExclusiveCleared（独占清除核心判定）', () => {
