@@ -1,26 +1,8 @@
-// 共用工具（CommonKit：uid / escapeHtml / normalizeTempScope 等）
-importScripts('../utils/common.js');
+// 共用工具与存储层（CommonKit / Matcher / StyleKit / Storage）
+// 规则与设置的读取全部走 Storage：默认值、预设迁移、URL 匹配与 popup/options 同源，
+// 避免这里再抄一份 getSettings/urlMatch 造成口径漂移
+importScripts('../utils/common.js', '../utils/matcher.js', '../utils/style.js', '../utils/storage.js');
 
-var RULES_KEY = 'ah_rules';
-var SETTINGS_KEY = 'ah_settings';
-var STORAGE_MODE_KEY = 'ah_storage_mode';
-var _bgIsLocal = false;
-var _bgFallbackChecked = false;
-
-async function _bgCheckFallback() {
-  if (_bgFallbackChecked) return;
-  _bgFallbackChecked = true;
-  var d = await chrome.storage.local.get(STORAGE_MODE_KEY);
-  _bgIsLocal = d[STORAGE_MODE_KEY] === 'local';
-}
-
-async function _bgGetStorage(keys) {
-  await _bgCheckFallback();
-  if (_bgIsLocal) {
-    return await chrome.storage.local.get(keys);
-  }
-  return await chrome.storage.sync.get(keys);
-}
 var disabledTabs = {};
 var tabBadgeCounts = {};
 // 关键词导航的全局游标（跨 frame 合并计数后按全局序号接力）：key = tabId|kwId
@@ -128,7 +110,7 @@ function filterTempHiddenIds(ids) {
   var out = [];
   for (var i = 0; i < (ids || []).length; i++) {
     var id = ids[i];
-    if (typeof id === 'string' && id.indexOf('tmp_') === 0 && out.indexOf(id) < 0) out.push(id);
+    if (CommonKit.isTempKwId(id) && out.indexOf(id) < 0) out.push(id);
   }
   return out;
 }
@@ -214,49 +196,21 @@ function bgLog() {
   }
 }
 
-function urlMatch(url, pattern, matchType) {
-  if (!pattern) return false;
-  try {
-    switch (matchType) {
-      case 'contains':
-        return url.indexOf(pattern) !== -1;
-      case 'exact':
-        return url === pattern;
-      case 'regex':
-        return new RegExp(pattern).test(url);
-      case 'wildcard':
-        var regexStr = '^' + pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$';
-        return new RegExp(regexStr).test(url);
-      default:
-        return url.indexOf(pattern) !== -1;
-    }
-  } catch (e) {
-    return false;
-  }
-}
-
 async function getRules() {
-  var d = await _bgGetStorage(RULES_KEY);
-  return d[RULES_KEY] || [];
+  return await Storage.getRules();
 }
 
 async function getSettings() {
+  // 与 popup / options 完全同源：完整默认值 + 出厂预设迁移都在 Storage.getSettings 里
   // 全局默认样式由 settings.stylePresets[0] 提供，不再使用 defaultColor
-  var defaults = { showRail: true };
-  var d = await _bgGetStorage(SETTINGS_KEY);
-  return Object.assign({}, defaults, d[SETTINGS_KEY] || {});
+  return await Storage.getSettings();
 }
 
 async function getMatchedRules(url) {
   // 网站规则同优先级（顺序即优先级）：多条规则匹配同一网站时，只有最上方的一条生效。
   // 高亮只下发这一条；popup 的「匹配规则」列表由 popup 自行过滤展示，不受此限制。
-  var rules = await getRules();
-  for (var i = 0; i < rules.length; i++) {
-    if (rules[i].enabled && urlMatch(url, rules[i].urlPattern, rules[i].urlMatchType)) {
-      return [rules[i]];
-    }
-  }
-  return [];
+  // URL 匹配统一走 Storage.getMatchedRules（内部是 Matcher.matchUrl），不再本地抄一份
+  return await Storage.getMatchedRules(url);
 }
 
 function setIconDisabled(tabId, disabled) {
@@ -665,80 +619,21 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   }
 });
 
-var SPOT_KEY = 'ah_spot_highlights';
-
-async function _bgGetAllSpotHighlightsForTab(tabId) {
-  var data = await chrome.storage.local.get(SPOT_KEY);
-  var all = data[SPOT_KEY] || {};
-  var prefix = 'spot_' + tabId + '_';
-  var merged = [];
-  for (var key in all) {
-    if (all.hasOwnProperty(key) && key.indexOf(prefix) === 0) {
-      var arr = all[key];
-      for (var i = 0; i < arr.length; i++) {
-        merged.push(arr[i]);
-      }
-    }
-  }
-  return merged;
+// spot 的存储键格式与读写全部在 utils/storage.js 维护，这里只做消息层转发
+function _bgGetAllSpotHighlightsForTab(tabId) {
+  return Storage.getAllSpotHighlightsForTab(tabId);
 }
 
-async function _bgDeleteSpotHighlight(tabId, spotId) {
-  var data = await chrome.storage.local.get(SPOT_KEY);
-  var all = data[SPOT_KEY] || {};
-  // spot 按 frame 分 key 存储，删除要扫遍该 tab 下所有 frame 的 key，
-  // 否则子 frame 里创建的 spot 删不干净，重开 popup 仍会残留
-  var prefix = 'spot_' + tabId + '_';
-  for (var key in all) {
-    if (all.hasOwnProperty(key) && key.indexOf(prefix) === 0) {
-      all[key] = all[key].filter(function (s) { return s.id !== spotId; });
-    }
-  }
-  await chrome.storage.local.set({ [SPOT_KEY]: all });
+function _bgDeleteSpotHighlight(tabId, spotId) {
+  return Storage.deleteSpotHighlightForTab(tabId, spotId);
 }
 
-async function _bgStoreSpotHighlight(tabId, frameId, spotId, data) {
-  var allData = await chrome.storage.local.get(SPOT_KEY);
-  var all = allData[SPOT_KEY] || {};
-  var key = 'spot_' + tabId + '_' + (frameId || 0);
-  var list = all[key] || [];
-  list.push({
-    id: spotId,
-    text: data.text,
-    color: data.color,
-    textColor: data.textColor,
-    fontSize: data.fontSize,
-    bold: data.bold === true,
-    italic: data.italic === true,
-    underline: data.underline === true,
-    strike: data.strike === true,
-    createdAt: Date.now()
-  });
-  all[key] = list;
-  await chrome.storage.local.set({ [SPOT_KEY]: all });
+function _bgStoreSpotHighlight(tabId, frameId, spotId, data) {
+  return Storage.storeSpotHighlight(tabId, frameId, spotId, data);
 }
 
-async function _bgUpdateSpotStyle(tabId, spotId, style) {
-  var data = await chrome.storage.local.get(SPOT_KEY);
-  var all = data[SPOT_KEY] || {};
-  var prefix = 'spot_' + tabId + '_';
-  for (var key in all) {
-    if (all.hasOwnProperty(key) && key.indexOf(prefix) === 0) {
-      var list = all[key];
-      for (var i = 0; i < list.length; i++) {
-        if (list[i].id === spotId) {
-          if (style.bgColor !== undefined) list[i].color = style.bgColor || '';
-          list[i].textColor = style.textColor;
-          list[i].fontSize = style.fontSize;
-          list[i].bold = style.bold === true;
-          list[i].italic = style.italic === true;
-          list[i].underline = style.underline === true;
-          list[i].strike = style.strike === true;
-        }
-      }
-    }
-  }
-  await chrome.storage.local.set({ [SPOT_KEY]: all });
+function _bgUpdateSpotStyle(tabId, spotId, style) {
+  return Storage.updateSpotStyle(tabId, spotId, style);
 }
 
 chrome.contextMenus.onClicked.addListener(function (info, tab) {

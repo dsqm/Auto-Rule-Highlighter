@@ -262,5 +262,64 @@ var Storage = {
 
   async clearSpotHighlights(tabId, frameId) {
     await this.saveSpotHighlights(tabId, frameId, []);
+  },
+
+  // 以下三个是 background 用的变体：写入时 spotId 已定、删除/改样式要扫遍该 tab
+  // 所有 frame 的 key（子 frame 里创建的 spot 只按单 frame 删不干净）。
+  // spot 的存储键格式只在这里维护，background 通过这些方法读写，不要再拼 'spot_' 字符串
+  async storeSpotHighlight(tabId, frameId, spotId, data) {
+    var dataAll = await chrome.storage.local.get(this.SPOT_KEY);
+    var all = dataAll[this.SPOT_KEY] || {};
+    var key = this._spotFrameKey(tabId, frameId);
+    var list = all[key] || [];
+    list.push({
+      id: spotId,
+      text: data.text,
+      color: data.color,
+      textColor: data.textColor,
+      fontSize: data.fontSize,
+      bold: data.bold === true,
+      italic: data.italic === true,
+      underline: data.underline === true,
+      strike: data.strike === true,
+      createdAt: Date.now()
+    });
+    all[key] = list;
+    await chrome.storage.local.set({ [this.SPOT_KEY]: all });
+  },
+
+  async deleteSpotHighlightForTab(tabId, spotId) {
+    var data = await chrome.storage.local.get(this.SPOT_KEY);
+    var all = data[this.SPOT_KEY] || {};
+    var prefix = 'spot_' + tabId + '_';
+    for (var key in all) {
+      if (all.hasOwnProperty(key) && key.indexOf(prefix) === 0) {
+        all[key] = all[key].filter(function (s) { return s.id !== spotId; });
+      }
+    }
+    await chrome.storage.local.set({ [this.SPOT_KEY]: all });
+  },
+
+  async updateSpotStyle(tabId, spotId, style) {
+    var data = await chrome.storage.local.get(this.SPOT_KEY);
+    var all = data[this.SPOT_KEY] || {};
+    var prefix = 'spot_' + tabId + '_';
+    for (var key in all) {
+      if (all.hasOwnProperty(key) && key.indexOf(prefix) === 0) {
+        var list = all[key];
+        for (var i = 0; i < list.length; i++) {
+          if (list[i].id === spotId) {
+            if (style.bgColor !== undefined) list[i].color = style.bgColor || '';
+            list[i].textColor = style.textColor;
+            list[i].fontSize = style.fontSize;
+            list[i].bold = style.bold === true;
+            list[i].italic = style.italic === true;
+            list[i].underline = style.underline === true;
+            list[i].strike = style.strike === true;
+          }
+        }
+      }
+    }
+    await chrome.storage.local.set({ [this.SPOT_KEY]: all });
   }
 };

@@ -290,7 +290,7 @@
   function applyTempState(keywords, tempHidden) {
     var kept = [];
     for (var i = 0; i < hiddenKwIds.length; i++) {
-      if (String(hiddenKwIds[i]).indexOf('tmp_') !== 0) kept.push(hiddenKwIds[i]);
+      if (!CommonKit.isTempKwId(hiddenKwIds[i])) kept.push(hiddenKwIds[i]);
     }
     var nextHidden = kept.concat(tempHidden || []);
     // 关键词和隐藏态都没变就是空转，直接跳过（广播会打到每个 frame，重复拆建代价高）。
@@ -765,7 +765,7 @@
       if (allMatches.length === 0) continue;
 
       for (var ap = 0; ap < allMatches.length; ap++) {
-        var isTempKwAp = allMatches[ap].keywordId && allMatches[ap].keywordId.indexOf('tmp_') === 0;
+        var isTempKwAp = CommonKit.isTempKwId(allMatches[ap].keywordId);
         allMatches[ap]._hide = exclusiveHidesOrder(allMatches[ap].globalOrder, isTempKwAp);
       }
       allMatches.sort(function (a, b) {
@@ -915,7 +915,7 @@
       mark.dataset.ahGlobalOrder = String(match.globalOrder);
       mark.dataset.ahGroupId = String(match.groupId);
 
-      var isTempKw = match.keywordId && match.keywordId.indexOf('tmp_') === 0;
+      var isTempKw = CommonKit.isTempKwId(match.keywordId);
       var matchHide = match._hide !== undefined ? match._hide : exclusiveHidesOrder(match.globalOrder, isTempKw);
       mark.className = matchHide ? classForMatch(match) + ' ah-hidden' : classForMatch(match);
       mark.dataset.ahHidden = matchHide ? 'true' : '';
@@ -1327,7 +1327,7 @@
     }
     if (allMatches.length === 0) return;
     for (var p = 0; p < allMatches.length; p++) {
-      var isTempKwP = allMatches[p].keywordId && allMatches[p].keywordId.indexOf('tmp_') === 0;
+      var isTempKwP = CommonKit.isTempKwId(allMatches[p].keywordId);
       allMatches[p]._hide = exclusiveHidesOrder(allMatches[p].globalOrder, isTempKwP);
     }
     allMatches.sort(function (a, b) {
@@ -1420,7 +1420,7 @@
       var m = marks[i];
       var kwId = m.dataset.ahKeywordId;
       var order = parseInt(m.dataset.ahGlobalOrder, 10);
-      var isTempKw = kwId && kwId.indexOf('tmp_') === 0;
+      var isTempKw = CommonKit.isTempKwId(kwId);
       var isManuallyShown = manualShowKwIds.indexOf(kwId) >= 0;
       var isHiddenByExclusive = exclusiveHidesOrder(order, isTempKw);
       var isManuallyHidden = hiddenKwIds.indexOf(kwId) >= 0;
@@ -1712,7 +1712,7 @@
   function isCountableMark(m) {
     var kwId = m.dataset.ahKeywordId;
     if (!kwId) return false;
-    var isTempKw = kwId.indexOf('tmp_') === 0;
+    var isTempKw = CommonKit.isTempKwId(kwId);
     var isManuallyShown = manualShowKwIds.indexOf(kwId) >= 0;
     if (hiddenKwIds.indexOf(kwId) >= 0 && !isManuallyShown) return false;
     if (exclusiveHidesOrder(m.dataset.ahGlobalOrder, isTempKw)) return false;

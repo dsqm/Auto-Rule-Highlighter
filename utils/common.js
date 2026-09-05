@@ -36,11 +36,19 @@ var CommonKit = (function () {
     return (v === 'page' || v === 'tab' || v === 'global') ? v : 'tab';
   }
 
+  // 临时关键词 id 的唯一判定：所有「这是不是临时关键词」的判断都走这里，
+  // 前缀变了只改 TEMP_PREFIX 一处
+  var TEMP_PREFIX = 'tmp_';
+  function isTempKwId(id) {
+    return typeof id === 'string' && id.indexOf(TEMP_PREFIX) === 0;
+  }
+
   return {
     MATCH_TYPES: MATCH_TYPES,
     escapeHtml: escapeHtml,
     getMatchTypeLabel: getMatchTypeLabel,
     uid: uid,
-    normalizeTempScope: normalizeTempScope
+    normalizeTempScope: normalizeTempScope,
+    isTempKwId: isTempKwId
   };
 })();
