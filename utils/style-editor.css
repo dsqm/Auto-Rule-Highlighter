@@ -1,0 +1,37 @@
+/* style-editor.css — StyleEditor 共享样式（options 与 popup 复用）
+ *
+ * 三方共用 StyleEditor / StyleBar（utils/style-editor.js），凡新增或调整
+ * 编辑器 / 样式栏样式，改本文件即可同步 options 与 popup 全部出现位置。
+ */
+
+/* ===== 带开关的样式编辑器内部行样式（.se-*）===== */
+.se-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.se-row:last-child { margin-bottom: 0; }
+.se-label { width: 32px; font-size: 12px; color: #999; flex-shrink: 0; }
+.se-toggle { flex-shrink: 0; width: auto; margin: 0; }
+.se-row input[type="color"] { width: 24px; height: 24px; padding: 0; border: 1px solid #d9d9d9; border-radius: 3px; cursor: pointer; flex-shrink: 0; background: none; }
+.se-row input[type="color"]:disabled { opacity: 0.3; cursor: not-allowed; }
+.se-row input[type="text"] { flex: 1; min-width: 0; padding: 3px 6px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 12px; outline: none; font-family: monospace; }
+.se-row input[type="text"]:focus { border-color: #1890ff; }
+.se-row select { flex: 1; min-width: 0; padding: 3px 6px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 12px; outline: none; background: #fff; color: #333; }
+.se-row select:disabled, .se-row input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
+.se-row input[type="range"] { flex: 1; min-width: 0; }
+.se-fs-val { width: 34px; text-align: right; font-size: 12px; color: #666; flex-shrink: 0; }
+.se-auto-invert { display: inline-flex; align-items: center; gap: 2px; font-size: 11px; color: #666; white-space: nowrap; flex-shrink: 0; cursor: pointer; user-select: none; }
+.se-auto-invert input { margin: 0; }
+.se-auto-invert:has(input:disabled) { opacity: 0.45; cursor: not-allowed; }
+.se-chip { min-width: 26px; height: 22px; border: 1px solid #d9d9d9; border-radius: 4px; background: #fff; cursor: pointer; font-size: 12px; color: #666; line-height: 1; }
+.se-chip:hover { border-color: #1890ff; }
+.se-chip.on { background: #e6f7ff; color: #1890ff; border-color: #91d5ff; }
+.se-chip.b { font-weight: 700; }
+.se-chip.i { font-style: italic; }
+.se-chip.u { text-decoration: underline; }
+.se-chip.s { text-decoration: line-through; }
+
+/* ===== 居中弹窗/浮动色板骨架（.modal 系，options / popup 复用）=====
+ * 公共视觉：白底 / 圆角 / 阴影 / 标题 / 按钮栏。宽度、内边距等随页面载体
+ * 而异的特性留在各页面自己的 <style> 内覆盖。 */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.modal { background: #fff; border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.15); }
+.modal h3 { font-size: 14px; font-weight: 500; color: #333; margin: 0 0 12px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }

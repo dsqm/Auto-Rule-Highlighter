@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
+  <link rel="stylesheet" href="../utils/style-editor.css">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { width: 480px; height: 383px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; color: #333; background: #fafafa; overflow: hidden; display: flex; flex-direction: column; position: relative; }
@@ -60,39 +61,14 @@
     .kw-rule-name { font-size: 10px; color: #999; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
     .kw-exclusive-icon { font-size: 11px; margin-right: 3px; }
     .kw-item.kw-auto-hidden { opacity: 0.5; background: #f5f5f5; }
-    .color-picker-popup { position: fixed; z-index: 99999; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,0.12); padding: 12px; width: 300px; display: none; max-height: 320px; overflow-y: auto; }
+    .color-picker-popup { position: fixed; z-index: 99999; padding: 12px; width: 300px; display: none; max-height: 320px; overflow-y: auto; }
     .color-picker-popup.show { display: block; }
-    .cpp-title { font-size: 12px; font-weight: 500; color: #333; margin-bottom: 10px; }
-    .se-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
-    .se-row:last-child { margin-bottom: 0; }
-    .se-label { width: 32px; font-size: 12px; color: #999; flex-shrink: 0; }
-    .se-toggle { flex-shrink: 0; width: auto; margin: 0; }
-    .se-row input[type="color"] { width: 24px; height: 24px; padding: 0; border: 1px solid #d9d9d9; border-radius: 3px; cursor: pointer; flex-shrink: 0; background: none; }
-    .se-row input[type="color"]:disabled { opacity: 0.3; cursor: not-allowed; }
-    .se-row input[type="text"] { flex: 1; min-width: 0; padding: 3px 6px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 12px; outline: none; font-family: monospace; }
-    .se-row input[type="text"]:focus { border-color: #1890ff; }
-    .se-row select { flex: 1; min-width: 0; padding: 3px 6px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 12px; outline: none; background: #fff; color: #333; }
-    .se-row select:disabled, .se-row input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
-    .se-row input[type="range"] { flex: 1; min-width: 0; }
-    .se-fs-val { font-size: 12px; width: 34px; text-align: right; flex-shrink: 0; color: #666; }
-    .se-auto-invert { display: inline-flex; align-items: center; gap: 2px; font-size: 11px; color: #666; white-space: nowrap; flex-shrink: 0; cursor: pointer; user-select: none; }
-    .se-auto-invert input { margin: 0; }
-    .se-auto-invert:has(input:disabled) { opacity: 0.45; cursor: not-allowed; }
-    .se-chip { min-width: 26px; height: 22px; border: 1px solid #d9d9d9; border-radius: 4px; background: #fff; cursor: pointer; font-size: 12px; color: #666; line-height: 1; }
-    .se-chip:hover { border-color: #1890ff; }
-    .se-chip.on { background: #e6f7ff; color: #1890ff; border-color: #91d5ff; }
-    .se-chip.b { font-weight: 700; }
-    .se-chip.i { font-style: italic; }
-    .se-chip.u { text-decoration: underline; }
-    .se-chip.s { text-decoration: line-through; }
-    .cpp-actions { display: flex; gap: 6px; justify-content: flex-end; margin-top: 12px; position: sticky; bottom: -12px; background: #fff; padding: 6px 0; }
-    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; z-index: 1000000; }
-    .modal { background: #fff; border-radius: 10px; padding: 20px; width: 320px; }
-    .modal h3 { font-size: 14px; margin-bottom: 10px; }
+    .color-picker-popup.modal { width: 300px; padding: 12px; }
+    .modal-overlay { z-index: 1000000; }
+    .modal { padding: 20px; width: 320px; }
     .modal-tip { font-size: 12px; color: #999; margin-bottom: 8px; line-height: 1.5; }
     .modal input[type="text"] { width: 100%; padding: 8px 10px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 13px; outline: none; box-sizing: border-box; }
     .modal input[type="text"]:focus { border-color: #1890ff; }
-    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
     .manual-clear-badge { display: flex; align-items: center; justify-content: flex-end; padding: 6px 16px; background: #fffbe6; border-top: 1px dashed #ffe58f; }
     .empty-hint { padding: 12px 16px; font-size: 12px; color: #bbb; text-align: center; }
     .footer { padding: 10px 16px; display: flex; gap: 8px; align-items: center; justify-content: space-between; background: #fff; border-top: 1px solid #e8e8e8; flex-shrink: 0; }
@@ -166,10 +142,10 @@
 
   <div class="history-dropdown" id="historyDropdown"></div>
 
-  <div class="color-picker-popup" id="colorPickerPopup">
-    <div class="cpp-title">自定义样式</div>
+  <div class="color-picker-popup modal" id="colorPickerPopup">
+    <h3>自定义样式</h3>
     <div id="cppStyleBody"></div>
-    <div class="cpp-actions">
+    <div class="modal-actions">
       <button class="btn btn-sm" id="cppCancel">取消</button>
       <button class="btn btn-sm btn-primary" id="cppApply">应用</button>
     </div>
